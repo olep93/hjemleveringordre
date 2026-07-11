@@ -1,5 +1,6 @@
         .env.example
         .gitignore
+        FILSTRUKTUR.txt
         PROJECT_STRUCTURE_VERIFIED.json
         README.md
         next-env.d.ts
@@ -28,6 +29,8 @@
         src/app/api/auth/logout/route.ts
 [MAPPE] src/app/api/auth/me
         src/app/api/auth/me/route.ts
+[MAPPE] src/app/api/files
+        src/app/api/files/route.ts
 [MAPPE] src/app/api/orders
 [MAPPE] src/app/api/orders/[id]
 [MAPPE] src/app/api/orders/[id]/items
@@ -59,6 +62,7 @@
         src/components/order-detail-client.tsx
 [MAPPE] src/lib
         src/lib/auth.ts
+        src/lib/blob-storage.ts
 [MAPPE] src/lib/firebase
         src/lib/firebase/admin.ts
         src/lib/notifications.ts
