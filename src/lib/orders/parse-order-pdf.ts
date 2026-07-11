@@ -27,7 +27,13 @@ export type ParsedOrder = {
   parserVersion: string;
 };
 
-const PARSER_VERSION = "obsbygg-mupdf-v5";
+type PositionedText = {
+  text: string;
+  x: number;
+  y: number;
+};
+
+const PARSER_VERSION = "obsbygg-mupdf-coordinates-v6";
 
 function clean(value?: string | null): string {
   return String(value ?? "")
@@ -39,7 +45,7 @@ function clean(value?: string | null): string {
 
 function parseDecimal(value?: string | null): number | null {
   const normalized = clean(value)
-    .replace(/\./g, "")
+    .replace(/\.(?=\d{3}(?:\D|$))/g, "")
     .replace(",", ".");
 
   if (!normalized) return null;
@@ -60,37 +66,117 @@ function normalizeCustomerName(value?: string | null): string | null {
   return customer;
 }
 
-function extractText(buffer: Buffer): string {
+function collectSpans(node: unknown, result: PositionedText[]): void {
+  if (!node || typeof node !== "object") return;
+
+  const value = node as Record<string, unknown>;
+
+  if (typeof value.text === "string" && Array.isArray(value.bbox)) {
+    const bbox = value.bbox.map(Number);
+    if (bbox.length >= 4) {
+      result.push({
+        text: clean(value.text),
+        x: bbox[0],
+        y: (bbox[1] + bbox[3]) / 2
+      });
+    }
+  }
+
+  for (const child of Object.values(value)) {
+    if (Array.isArray(child)) {
+      for (const item of child) collectSpans(item, result);
+    } else if (child && typeof child === "object") {
+      collectSpans(child, result);
+    }
+  }
+}
+
+function groupSpansIntoRows(spans: PositionedText[]): string[] {
+  const sorted = spans
+    .filter((span) => span.text)
+    .sort((a, b) => {
+      const yDiff = a.y - b.y;
+      if (Math.abs(yDiff) > 2.5) return yDiff;
+      return a.x - b.x;
+    });
+
+  const rows: Array<{ y: number; spans: PositionedText[] }> = [];
+
+  for (const span of sorted) {
+    let row = rows.find((candidate) => Math.abs(candidate.y - span.y) <= 2.5);
+
+    if (!row) {
+      row = { y: span.y, spans: [] };
+      rows.push(row);
+    }
+
+    row.spans.push(span);
+    row.y =
+      row.spans.reduce((sum, current) => sum + current.y, 0) /
+      row.spans.length;
+  }
+
+  return rows
+    .sort((a, b) => a.y - b.y)
+    .map((row) =>
+      clean(
+        row.spans
+          .sort((a, b) => a.x - b.x)
+          .map((span) => span.text)
+          .join(" ")
+      )
+    )
+    .filter(Boolean);
+}
+
+function extractRows(buffer: Buffer): string[] {
   const document = mupdf.PDFDocument.openDocument(
     new Uint8Array(buffer),
     "application/pdf"
   );
 
   try {
-    const pages: string[] = [];
+    const rows: string[] = [];
 
-    for (let index = 0; index < document.countPages(); index++) {
-      const page = document.loadPage(index);
+    for (let pageIndex = 0; pageIndex < document.countPages(); pageIndex++) {
+      const page = document.loadPage(pageIndex);
 
       try {
-        const text = page.toStructuredText("preserve-whitespace").asText();
-        pages.push(text);
+        const structuredText = page.toStructuredText("preserve-whitespace");
+
+        try {
+          const spans: PositionedText[] = [];
+
+          try {
+            const json = JSON.parse(structuredText.asJSON()) as unknown;
+            collectSpans(json, spans);
+          } catch {
+            // Some PDFs do not expose structured JSON correctly.
+          }
+
+          if (spans.length > 0) {
+            rows.push(...groupSpansIntoRows(spans));
+          } else {
+            rows.push(
+              ...structuredText
+                .asText()
+                .split(/\r?\n/)
+                .map(clean)
+                .filter(Boolean)
+            );
+          }
+        } finally {
+          structuredText.destroy();
+        }
       } finally {
         page.destroy();
       }
     }
 
-    return pages.join("\n");
+    return rows;
   } finally {
     document.destroy();
   }
-}
-
-function normalizeLines(text: string): string[] {
-  return text
-    .split(/\r?\n/)
-    .map(clean)
-    .filter(Boolean);
 }
 
 function extractOrderNumber(text: string): string | null {
@@ -101,10 +187,16 @@ function extractOrderNumber(text: string): string | null {
   );
 }
 
-function extractCustomerName(lines: string[], text: string): string | null {
-  for (const line of lines) {
-    const match = line.match(/\bKunde:\s*(\d+\s+.+)$/i);
-    if (match?.[1]) return normalizeCustomerName(match[1]);
+function extractCustomerName(rows: string[], text: string): string | null {
+  for (let index = 0; index < rows.length; index++) {
+    const row = rows[index];
+
+    const inline = row.match(/\bKunde:\s*(\d+\s+.+)$/i);
+    if (inline?.[1]) return normalizeCustomerName(inline[1]);
+
+    if (/^Kunde:\s*$/i.test(row) && rows[index + 1]) {
+      return normalizeCustomerName(rows[index + 1]);
+    }
   }
 
   return normalizeCustomerName(
@@ -112,9 +204,9 @@ function extractCustomerName(lines: string[], text: string): string | null {
   );
 }
 
-function extractPhone(lines: string[], text: string): string | null {
+function extractPhone(rows: string[], text: string): string | null {
   const source =
-    lines.find((line) => /\bMobiltelefon:/i.test(line)) ??
+    rows.find((row) => /\bMobiltelefon:/i.test(row)) ??
     text.match(/\bMobiltelefon:\s*([^\r\n]+)/i)?.[0] ??
     "";
 
@@ -136,42 +228,84 @@ function extractOrderDate(text: string): string | null {
   );
 }
 
-function extractSeller(lines: string[], text: string): string | null {
-  const line = lines.find((value) => /^Selger:/i.test(value));
+function extractSeller(rows: string[], text: string): string | null {
+  const row = rows.find((value) => /^Selger:/i.test(value));
 
-  if (line) {
-    return clean(line.replace(/^Selger:\s*/i, "")) || null;
-  }
+  if (row) return clean(row.replace(/^Selger:\s*/i, "")) || null;
 
   return clean(text.match(/\bSelger:\s*([^\r\n]+)/i)?.[1]) || null;
 }
 
-function createItem(
-  values: {
-    articleNumber: string;
-    description: string;
-    bestNumber: string;
-    quantity: string;
-    unit: string;
-    deliveredQuantity: string;
-    price: string;
-    lineTotal: string;
-  },
-  index: number
-): ParsedOrderItem {
-  const description = clean(values.description);
+function isUnit(value: string): boolean {
+  return /^(stk|m|lm|pk|pak|sett|eske|par)$/i.test(value);
+}
+
+function isQuantity(value: string): boolean {
+  return /^\d+(?:[.,]\d+)?$/.test(value);
+}
+
+function isDate(value: string): boolean {
+  return /^\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4}$/.test(value);
+}
+
+function parseItemRow(row: string, index: number): ParsedOrderItem | null {
+  const eanMatch = clean(row).match(/^(\d{6,14})\s+(.+)$/);
+  if (!eanMatch) return null;
+
+  const articleNumber = eanMatch[1];
+  const tokens = clean(eanMatch[2]).split(" ").filter(Boolean);
+
+  const unitIndex = tokens.findIndex(
+    (token, tokenIndex) =>
+      isUnit(token) &&
+      tokenIndex > 0 &&
+      isQuantity(tokens[tokenIndex - 1])
+  );
+
+  if (unitIndex < 2) return null;
+
+  const quantity = tokens[unitIndex - 1];
+  const unit = tokens[unitIndex];
+
+  let bestNumberIndex = unitIndex - 2;
+
+  while (
+    bestNumberIndex >= 0 &&
+    (isDate(tokens[bestNumberIndex]) ||
+      !/^\d{5,10}$/.test(tokens[bestNumberIndex]))
+  ) {
+    bestNumberIndex--;
+  }
+
+  if (bestNumberIndex < 1) return null;
+
+  const bestNumber = tokens[bestNumberIndex];
+  const description = clean(tokens.slice(0, bestNumberIndex).join(" "));
+  if (!description) return null;
+
+  const numericAfterUnit = tokens
+    .slice(unitIndex + 1)
+    .filter((token) => /^[\d.,]+$/.test(token));
+
+  const deliveredQuantity = numericAfterUnit[0] ?? quantity;
+  const price = numericAfterUnit[1] ?? null;
+  const lineTotal =
+    numericAfterUnit.length >= 4
+      ? numericAfterUnit[3]
+      : numericAfterUnit.at(-1) ?? null;
+
   const isFreight = /frakt/i.test(description);
 
   return {
-    id: `${values.articleNumber}-${index + 1}`,
-    articleNumber: values.articleNumber,
+    id: `${articleNumber}-${index + 1}`,
+    articleNumber,
     description,
-    bestNumber: values.bestNumber,
-    quantity: parseDecimal(values.quantity) ?? 1,
-    unit: clean(values.unit) || null,
-    deliveredQuantity: parseDecimal(values.deliveredQuantity),
-    price: parseDecimal(values.price),
-    lineTotal: parseDecimal(values.lineTotal),
+    bestNumber,
+    quantity: parseDecimal(quantity) ?? 1,
+    unit,
+    deliveredQuantity: parseDecimal(deliveredQuantity),
+    price: parseDecimal(price),
+    lineTotal: parseDecimal(lineTotal),
     checked: isFreight,
     checkedBy: isFreight ? "SYSTEM" : null,
     checkedAt: isFreight ? new Date().toISOString() : null,
@@ -179,85 +313,47 @@ function createItem(
   };
 }
 
-function parseRow(line: string, index: number): ParsedOrderItem | null {
-  const pattern =
-    /^(\d{6,14})\s+(.+?)\s+(\d{5,10})\s+(?:(?:\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4})\s+)?(\d+(?:[.,]\d+)?)\s+(Stk|M|LM|Pk|Pak|Sett|Eske|Par)\s+(\d+(?:[.,]\d+)?)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)$/i;
-
-  const match = clean(line).match(pattern);
-  if (!match) return null;
-
-  return createItem(
-    {
-      articleNumber: match[1],
-      description: match[2],
-      bestNumber: match[3],
-      quantity: match[4],
-      unit: match[5],
-      deliveredQuantity: match[6],
-      price: match[7],
-      lineTotal: match[9]
-    },
-    index
-  );
-}
-
-function parseRows(lines: string[]): ParsedOrderItem[] {
-  const headerIndex = lines.findIndex(
-    (line) =>
-      /EAN\/PLU/i.test(line) &&
-      /Varetekst/i.test(line) &&
-      /Bestnr/i.test(line)
+function parseRows(rows: string[]): ParsedOrderItem[] {
+  const tableStart = rows.findIndex(
+    (row) => /EAN\/PLU/i.test(row) && /Varetekst/i.test(row)
   );
 
-  const candidates = headerIndex >= 0 ? lines.slice(headerIndex + 1) : lines;
+  const candidates = tableStart >= 0 ? rows.slice(tableStart + 1) : rows;
   const items: ParsedOrderItem[] = [];
 
-  for (const line of candidates) {
-    if (/^(SUM|TOTALSUM|TOTAL SUM)\b/i.test(line)) break;
+  for (const row of candidates) {
+    if (/^(SUM|TOTALSUM|TOTAL SUM)\b/i.test(row)) break;
 
-    const item = parseRow(line, items.length);
+    const item = parseItemRow(row, items.length);
     if (item) items.push(item);
   }
 
   return items;
 }
 
-function parseCollapsedRows(lines: string[]): ParsedOrderItem[] {
-  const compact = clean(lines.join(" "));
-  const start = compact.search(/\bEAN\/PLU\b/i);
-  if (start < 0) return [];
+function parseFlattenedFallback(rows: string[]): ParsedOrderItem[] {
+  const text = clean(rows.join(" "));
+  const tableStart = text.search(/\bEAN\/PLU\b/i);
+  if (tableStart < 0) return [];
 
-  const endings = [
-    compact.search(/\bTOTALSUM\b/i),
-    compact.search(/\bTOTAL SUM\b/i),
-    compact.search(/\bSUM\b/i)
-  ].filter((value) => value > start);
-
-  if (endings.length === 0) return [];
-
-  const body = compact.slice(start, Math.min(...endings));
-  const pattern =
-    /(\d{6,14})\s+(.+?)\s+(\d{5,10})\s+(?:(?:\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4})\s+)?(\d+(?:[.,]\d+)?)\s+(Stk|M|LM|Pk|Pak|Sett|Eske|Par)\s+(\d+(?:[.,]\d+)?)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)/gi;
+  const tableText = text.slice(tableStart);
+  const eanMatches = [...tableText.matchAll(/\b\d{12,14}\b/g)];
 
   const items: ParsedOrderItem[] = [];
-  let match: RegExpExecArray | null;
 
-  while ((match = pattern.exec(body)) !== null) {
-    items.push(
-      createItem(
-        {
-          articleNumber: match[1],
-          description: match[2],
-          bestNumber: match[3],
-          quantity: match[4],
-          unit: match[5],
-          deliveredQuantity: match[6],
-          price: match[7],
-          lineTotal: match[9]
-        },
-        items.length
-      )
+  for (let index = 0; index < eanMatches.length; index++) {
+    const current = eanMatches[index];
+    const next = eanMatches[index + 1];
+
+    const start = current.index ?? 0;
+    const end = next?.index ?? tableText.search(/\b(?:SUM|TOTALSUM|TOTAL SUM)\b/i);
+
+    const chunk = clean(
+      tableText.slice(start, end > start ? end : tableText.length)
     );
+
+    const item = parseItemRow(chunk, items.length);
+    if (item) items.push(item);
   }
 
   return items;
@@ -282,20 +378,19 @@ function deduplicate(items: ParsedOrderItem[]): ParsedOrderItem[] {
 }
 
 export async function parseOrderPdf(buffer: Buffer): Promise<ParsedOrder> {
-  const extracted = extractText(buffer);
-  const lines = normalizeLines(extracted);
-  const rawText = lines.join("\n");
+  const rows = extractRows(buffer);
+  const rawText = rows.join("\n");
 
-  const rowItems = parseRows(lines);
+  const rowItems = parseRows(rows);
   const fallbackItems =
-    rowItems.length > 0 ? [] : parseCollapsedRows(lines);
+    rowItems.length > 0 ? [] : parseFlattenedFallback(rows);
 
   return {
     orderNumber: extractOrderNumber(rawText),
-    customerName: extractCustomerName(lines, rawText),
-    phone: extractPhone(lines, rawText),
+    customerName: extractCustomerName(rows, rawText),
+    phone: extractPhone(rows, rawText),
     orderDate: extractOrderDate(rawText),
-    seller: extractSeller(lines, rawText),
+    seller: extractSeller(rows, rawText),
     items: deduplicate([...rowItems, ...fallbackItems]),
     rawText,
     parserVersion: PARSER_VERSION

@@ -1,21 +1,8 @@
 {
   "project": "Hjemleveringordre",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "completeSrcFolder": true,
-  "storage": "Vercel Blob Private",
   "pdfEngine": "MuPDF",
-  "firebaseStorageRemoved": true,
-  "verifiedFiles": [
-    "src/app/page.tsx",
-    "src/app/layout.tsx",
-    "src/app/api/resend/inbound/route.ts",
-    "src/app/api/files/route.ts",
-    "src/app/api/orders/[id]/route.ts",
-    "src/lib/blob-storage.ts",
-    "src/lib/firebase/admin.ts",
-    "src/lib/orders/parse-order-pdf.ts",
-    "package.json",
-    "next.config.ts",
-    "tsconfig.json"
-  ]
+  "parser": "coordinate-based Obs Bygg table parser",
+  "storage": "Vercel Blob Private"
 }

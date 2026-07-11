@@ -1,84 +1,37 @@
-# Hjemleveringordre V1.2 – komplett prosjekt
+# Hjemleveringordre V1.2.1
 
-Dette er en komplett erstatningspakke. Den bruker:
+Denne versjonen retter varelinjetolkingen.
 
-- Firestore til ordredata, brukere, status og historikk
-- Vercel Blob Private til PDF-er og bilder
-- Resend til mottak av e-post og varslinger
-- MuPDF til lesing av Obs Bygg-kundeordre
-- Vercel til drift
+## Hva var galt?
 
-Firebase Storage brukes ikke.
+PDF-en var lesbar, men tabellcellene ble ikke nødvendigvis returnert som én ferdig tekstlinje.
+Den gamle parseren krevde at hele raden allerede lå i én bestemt tekststreng.
 
-## Viktig før opplasting til GitHub
+## Ny metode
 
-Slett alt innhold i repositoryet først, bortsett fra selve repositoryet.
+Parseren leser nå tekstfragmentenes koordinater fra MuPDF og bygger hver visuelle
+tabellrad fra venstre mot høyre. Deretter identifiseres:
 
-Du kan beholde `.gitignore`, men det er enklest å slette alle filer og laste opp hele innholdet fra denne pakken.
+- EAN/PLU
+- varetekst
+- bestillingsnummer
+- bestilt antall
+- enhet
+- levert antall
+- pris
+- linjesum
 
-Last opp innholdet i den utpakkede mappen til roten av repositoryet. GitHub skal vise blant annet:
+Det finnes også en ekstra fallback som deler tabellen på EAN-numrene hvis PDF-en
+likevel leverer teksten i feil rekkefølge.
 
-- `src/`
-- `package.json`
-- `next.config.ts`
-- `tsconfig.json`
-- `README.md`
+## Opplasting
 
-Det skal ikke finnes gamle filer som:
+Dette er en komplett prosjektpakke.
 
-- `next.config.js`
-- `next.config.mjs`
-- `next.config.cjs`
-- gamle parserfiler
-- `package-lock.json` fra tidligere forsøk
+1. Slett alt innhold i GitHub-repositoryet.
+2. Pakk ut ZIP-filen.
+3. Last opp hele innholdet til roten av repositoryet.
+4. Commit.
+5. Vent på Vercel-deploy.
 
-## Vercel
-
-Behold det eksisterende Vercel-prosjektet og disse miljøvariablene:
-
-- `FIREBASE_SERVICE_ACCOUNT`
-- `RESEND_API_KEY`
-- `RESEND_WEBHOOK_SECRET`
-- `SESSION_SECRET`
-- `BLOB_STORE_ID`
-- `BLOB_WEBHOOK_PUBLIC_KEY`
-
-Denne kan slettes:
-
-- `FIREBASE_STORAGE_BUCKET`
-
-Vercel Blob Store skal fortsatt være koblet til prosjektet.
-
-## Etter opplasting
-
-1. Commit hele prosjektet.
-2. Vent på Vercel-deploy.
-3. Ikke bruk gammel build-cache ved manuell redeploy.
-4. Åpne `/api/resend/inbound`.
-5. Kontroller at svaret viser:
-   - `"configured": true`
-   - `"storage": "Vercel Blob private"`
-
-## Testing
-
-Gamle ordre som peker til Firebase Storage bør slettes.
-
-Send deretter kundeordre-PDF-en på nytt til:
-
-`ordre@hjemlevering.jobbverktoy.no`
-
-For kundeordre 1549 forventes:
-
-- Kundeordre 1549 – Transportordre Ordresen
-- 500 M – 48X98 IMP K-VIRKE
-- 15 Stk – INFRA STØP B20 20KG
-- 200 M – 28X120 IMP TERRASSEB
-
-## Innlogging
-
-Testbruker:
-
-- Brukernavn: `Admin`
-- Passord: `midlertidigpassord`
-
-Innloggingsopplysningene vises ikke i appen.
+Behold eksisterende Environment Variables og Vercel Blob Store.
