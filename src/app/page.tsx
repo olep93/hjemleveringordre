@@ -1,9 +1,5 @@
 import { redirect } from "next/navigation";
-import {
-  createGuestSession,
-  ensureBootstrapData,
-  getSessionUser
-} from "@/lib/auth";
+import { ensureBootstrapData, getSessionUser } from "@/lib/auth";
 import Dashboard from "@/components/dashboard-client";
 
 export const dynamic = "force-dynamic";
@@ -14,8 +10,7 @@ export default async function HomePage() {
   const user = await getSessionUser();
 
   if (!user) {
-    await createGuestSession();
-    redirect("/");
+    redirect("/api/auth/guest?next=/");
   }
 
   return (
