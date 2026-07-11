@@ -1,4 +1,4 @@
-import { getDocument, type TextItem } from "pdfjs-dist/legacy/build/pdf.mjs";
+import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 
 export type ParsedOrderItem = {
   id: string;
@@ -83,7 +83,18 @@ async function extractPdfLines(buffer: Buffer): Promise<string[]> {
       const textContent = await page.getTextContent();
 
       const positioned: PositionedText[] = textContent.items
-        .filter((item): item is TextItem => "str" in item)
+        .filter(
+          (
+            item
+          ): item is {
+            str: string;
+            transform: number[];
+          } =>
+            typeof item === "object" &&
+            item !== null &&
+            "str" in item &&
+            "transform" in item
+        )
         .map((item) => ({
           text: clean(item.str),
           x: Number(item.transform[4] ?? 0),
