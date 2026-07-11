@@ -1,0 +1,26 @@
+{
+  "project": "Hjemleveringordre",
+  "version": "1.0.0",
+  "verified_src_folder": true,
+  "verified_files": [
+    "package.json",
+    "next.config.ts",
+    "tsconfig.json",
+    "src/app/page.tsx",
+    "src/app/layout.tsx",
+    "src/app/login/page.tsx",
+    "src/app/admin/page.tsx",
+    "src/app/api/resend/inbound/route.ts",
+    "src/app/api/orders/route.ts",
+    "src/app/api/orders/[id]/route.ts",
+    "src/app/api/orders/[id]/items/[itemId]/route.ts",
+    "src/app/api/orders/[id]/photos/route.ts",
+    "src/components/dashboard-client.tsx",
+    "src/components/order-detail-client.tsx",
+    "src/components/app-header.tsx",
+    "src/lib/firebase/admin.ts",
+    "src/lib/orders/parse-order-pdf.ts",
+    "src/lib/auth.ts",
+    "src/lib/notifications.ts"
+  ]
+}
