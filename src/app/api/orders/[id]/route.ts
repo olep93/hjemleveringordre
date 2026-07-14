@@ -28,10 +28,17 @@ type BlobReference = {
 type OrderItem = {
   id?: string;
   description?: string;
+  rawDescription?: string | null;
+  lineComment?: string | null;
+  identifierType?: "EAN" | "PLU" | null;
   productName?: string | null;
   articleNumber?: string | null;
+  bestNumber?: string | null;
   quantity?: number;
   unit?: string | null;
+  deliveredQuantity?: number | null;
+  price?: number | null;
+  lineTotal?: number | null;
   checked?: boolean;
   checkedBy?: string | null;
   checkedAt?: string | null;

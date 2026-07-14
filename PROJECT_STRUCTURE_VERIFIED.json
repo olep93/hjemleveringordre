@@ -1,6 +1,6 @@
 {
   "project": "Hjemleveringordre",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "completeSrcFolder": true,
   "includesAllFrom": "1.9.2",
   "features": [
@@ -8,5 +8,6 @@
     "reset to TO_PICK",
     "add edit delete items",
     "default Waypoint email"
-  ]
+  ],
+  "buildFix": "OrderItem type synchronized with parsed/admin item fields"
 }
