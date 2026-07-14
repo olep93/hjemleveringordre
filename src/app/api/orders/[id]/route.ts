@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
+import { randomBytes } from "crypto";
 import { adminDb } from "@/lib/firebase/admin";
 import { requireRole, requireUser } from "@/lib/auth";
 import {
@@ -185,6 +186,10 @@ export async function PATCH(
       phone?: string | null;
       itemChecks?: Array<{ id: string; checked: boolean }>;
       pickingSessionEnded?: boolean;
+      fulfillmentMethod?: "THIS_THURSDAY" | "NEXT_THURSDAY" | "OWN_VEHICLE";
+      pickupDate?: string | null;
+      pickupRecipientEmail?: string | null;
+      locationCode?: string | null;
     };
 
     const actorName = body.actorName?.trim() || "Ukjent";
@@ -229,12 +234,9 @@ export async function PATCH(
         );
       }
 
-      if (photos.length === 0) {
-        return NextResponse.json(
-          { error: "Last opp minst ett bilde av ferdig ordre før den ferdigstilles." },
-          { status: 400 }
-        );
-      }
+      if (photos.length === 0) return NextResponse.json({ error: "Last opp minst ett bilde av ferdig ordre før den ferdigstilles." }, { status: 400 });
+      if (placement === "Kasse Drive-In" && !body.locationCode?.trim()) return NextResponse.json({ error: "Skriv inn lokasjonskode for Kasse Drive-In, for eksempel B2." }, { status: 400 });
+      if (!body.fulfillmentMethod || !body.pickupDate) return NextResponse.json({ error: "Velg utkjøringsmåte og dato før ordren ferdigstilles." }, { status: 400 });
     }
 
     const newOrderNumber =
@@ -260,6 +262,10 @@ export async function PATCH(
     if ("orderNumber" in body) update.orderNumber = newOrderNumber;
     if ("customerName" in body) update.customerName = newCustomerName;
     if ("phone" in body) update.phone = body.phone?.trim() || null;
+    if ("locationCode" in body) update.locationCode = body.locationCode?.trim() || null;
+    if ("fulfillmentMethod" in body) update.fulfillmentMethod = body.fulfillmentMethod ?? null;
+    if ("pickupDate" in body) update.pickupDate = body.pickupDate || null;
+    if ("pickupRecipientEmail" in body) update.pickupRecipientEmail = body.pickupRecipientEmail?.trim().toLowerCase() || null;
 
     if (body.status === "PICKING") {
       update.pickedBy = actorName;
@@ -294,8 +300,9 @@ export async function PATCH(
             <h2 style="color:#002b67;">${latest.title ?? "Hjemlevering"}</h2>
             <p>Ordren er ferdig plukket av <strong>${actorName}</strong>.</p>
             <p>
-              Plassering: <strong>${latest.placement ?? "Ikke valgt"}</strong><br/>
-              Leveringsdato: <strong>${latest.deliveryDate ?? "Ikke satt"}</strong>
+              Plassering: <strong>${latest.placement ?? "Ikke valgt"}${latest.locationCode ? ` – ${latest.locationCode}` : ""}</strong><br/>
+              Utkjøring/henting: <strong>${latest.pickupDate ?? "Ikke satt"}</strong><br/>
+              Plukkekommentar: <strong>${latest.comment ?? "Ingen kommentar"}</strong>
             </p>
             <h3 style="margin-bottom:6px;">Ferdig plukket</h3>
             ${formatOrderItemsHtml(latest.items)}

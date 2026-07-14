@@ -21,6 +21,7 @@ export async function POST(request: NextRequest) {
       String(form.get("deliveryDate") ?? "").trim() ||
       getSuggestedDeliveryDate(new Date());
     const comment = String(form.get("comment") ?? "").trim() || null;
+    const requestedSource = String(form.get("sourceType") ?? "MANUAL");
     const createdBy = String(form.get("createdBy") ?? "").trim() || "Ukjent";
 
     let orderNumber = String(form.get("orderNumber") ?? "").trim() || null;
@@ -32,6 +33,26 @@ export async function POST(request: NextRequest) {
     let seller: string | null = null;
     let rawExtractedText: string | null = null;
     let items: ParsedOrderItem[] = [];
+    const itemsJson = String(form.get("itemsJson") ?? "").trim();
+    if (itemsJson) {
+      const entered = JSON.parse(itemsJson) as Array<{articleNumber?: string; description?: string; quantity?: string | number; unit?: string}>;
+      items = entered.filter((x) => x.description?.trim()).map((x, index) => {
+        const raw = String(x.description ?? "").trim();
+        const open = raw.match(/^(?:ÅPEN|APEN)\s+PLU\s+(.+)$/i);
+        return {
+          id: `manual-${Date.now()}-${index}`,
+          articleNumber: open || !/^\d{12,14}$/.test(String(x.articleNumber ?? "")) ? null : String(x.articleNumber),
+          description: open ? open[1].trim() : raw,
+          rawDescription: open ? raw : null,
+          bestNumber: null,
+          quantity: Number(x.quantity) || 1,
+          unit: String(x.unit ?? "Stk"),
+          deliveredQuantity: null, price: null, lineTotal: null,
+          checked: false, checkedBy: null, checkedAt: null,
+          isFreight: /frakt/i.test(raw)
+        } satisfies ParsedOrderItem;
+      });
+    }
 
     const orderRef = adminDb.collection("orders").doc();
     let originalDocumentBlob: {
@@ -40,7 +61,7 @@ export async function POST(request: NextRequest) {
       filename: string;
       contentType: string;
     } | null = null;
-    let source = "MANUAL";
+    let source = requestedSource === "CLICK_AND_COLLECT" ? "CLICK_AND_COLLECT" : "MANUAL";
 
     if (file instanceof File && file.size > 0) {
       const buffer = Buffer.from(await file.arrayBuffer());
@@ -57,7 +78,7 @@ export async function POST(request: NextRequest) {
         file.type === "application/pdf" ||
         file.name.toLowerCase().endsWith(".pdf")
       ) {
-        source = "MANUAL_PDF";
+        source = requestedSource === "CLICK_AND_COLLECT" ? "CLICK_AND_COLLECT" : "MANUAL_PDF";
 
         try {
           const parsed = await parseOrderPdf(buffer);
@@ -68,12 +89,12 @@ export async function POST(request: NextRequest) {
           orderDate = parsed.orderDate;
           seller = parsed.seller;
           rawExtractedText = parsed.rawText;
-          items = parsed.items;
+          if (items.length === 0) items = parsed.items;
         } catch {
           // Dokumentet lagres selv om tolkingen feiler.
         }
       } else {
-        source = "MANUAL_IMAGE";
+        source = requestedSource === "CLICK_AND_COLLECT" ? "CLICK_AND_COLLECT" : "MANUAL_IMAGE";
       }
     }
 
@@ -108,6 +129,10 @@ export async function POST(request: NextRequest) {
       placement: null,
       pickedBy: null,
       photos: [],
+      locationCode: null,
+      fulfillmentMethod: null,
+      pickupDate: null,
+      pickupRecipientEmail: null,
       createdBy,
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp()

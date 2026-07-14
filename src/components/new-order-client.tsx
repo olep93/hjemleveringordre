@@ -1,66 +1,26 @@
 "use client";
-
 import Link from "next/link";
-import { ArrowLeft, Camera, FileUp } from "lucide-react";
+import { ArrowLeft, Camera, ClipboardPaste, FileText, FileUp, Plus, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { FormEvent, useState } from "react";
+import { ChangeEvent, ClipboardEvent, DragEvent, FormEvent, useRef, useState } from "react";
 
-export default function NewOrderPage() {
-  const router = useRouter();
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setSaving(true);
-    setError(null);
-
-    try {
-      const formData = new FormData(event.currentTarget);
-      const response = await fetch("/api/orders/manual", {
-        method: "POST",
-        body: formData
-      });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error ?? "Kunne ikke opprette ordre.");
-      router.push(`/orders/${result.id}`);
-    } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "Kunne ikke opprette ordre.");
-      setSaving(false);
-    }
-  }
-
-  return (
-    <main className="page-shell">
-      <div className="page-header">
-        <Link className="back-link" href="/"><ArrowLeft size={19} /> Tilbake</Link>
-        <div><p className="eyebrow">RESERVELØSNING</p><h1>Legg til ordre manuelt</h1></div>
-      </div>
-
-      <form className="form-card" onSubmit={submit}>
-        <div className="upload-box">
-          <FileUp size={32} />
-          <div>
-            <strong>Last opp PDF eller ta bilde av ordrearket</strong>
-            <p>PDF tolkes automatisk. Bilde lagres og kan kontrolleres manuelt.</p>
-          </div>
-          <input name="file" type="file" accept="application/pdf,image/*" capture="environment" />
-        </div>
-
-        <div className="form-grid">
-          <label>Ordrenummer<input name="orderNumber" placeholder="F.eks. 539" /></label>
-          <label>Kundenavn<input name="customerName" placeholder="Navn på kunde" /></label>
-          <label>Telefon<input name="phone" inputMode="tel" placeholder="Mobilnummer" /></label>
-          <label>Leveringsdato<input name="deliveryDate" type="date" /></label>
-          <label>Opprettet av<input name="createdBy" required placeholder="Ditt navn" /></label>
-          <label className="full">Kommentar<textarea name="comment" rows={4} placeholder="Eventuell merknad eller avvik" /></label>
-        </div>
-
-        {error && <div className="error-box">{error}</div>}
-        <button className="primary-button large" disabled={saving}>
-          <Camera size={19} /> {saving ? "Oppretter …" : "Opprett ordre"}
-        </button>
-      </form>
-    </main>
-  );
+type Line={articleNumber:string;description:string;quantity:string;unit:string};
+export default function NewOrderPage(){
+ const router=useRouter(); const inputRef=useRef<HTMLInputElement>(null);
+ const [mode,setMode]=useState<"STANDARD"|"CLICK_AND_COLLECT">("STANDARD");
+ const [file,setFile]=useState<File|null>(null); const [preview,setPreview]=useState<string|null>(null);
+ const [lines,setLines]=useState<Line[]>([{articleNumber:"",description:"",quantity:"",unit:"Stk"}]);
+ const [saving,setSaving]=useState(false); const [error,setError]=useState<string|null>(null);
+ const click=mode==="CLICK_AND_COLLECT";
+ function selectFile(next:File|null){if(!next)return;setFile(next);setPreview(next.type.startsWith("image/")?URL.createObjectURL(next):null)}
+ function paste(e:ClipboardEvent<HTMLDivElement>){const f=Array.from(e.clipboardData.items).find(i=>i.type.startsWith("image/"))?.getAsFile();if(f){e.preventDefault();selectFile(new File([f],`klikk-hent-${Date.now()}.png`,{type:f.type}))}}
+ function drop(e:DragEvent<HTMLDivElement>){e.preventDefault();selectFile(e.dataTransfer.files?.[0]??null)}
+ function update(i:number,patch:Partial<Line>){setLines(c=>c.map((x,n)=>n===i?{...x,...patch}:x))}
+ async function submit(e:FormEvent<HTMLFormElement>){e.preventDefault();setSaving(true);setError(null);try{const fd=new FormData(e.currentTarget);fd.set("sourceType",click?"CLICK_AND_COLLECT":"MANUAL");if(file)fd.set("file",file);fd.set("itemsJson",JSON.stringify(lines.filter(x=>x.description.trim())));const r=await fetch("/api/orders/manual",{method:"POST",body:fd});const j=await r.json();if(!r.ok)throw new Error(j.error??"Kunne ikke opprette ordre.");router.push(`/orders/${j.id}`)}catch(err){setError(err instanceof Error?err.message:"Kunne ikke opprette ordre.");setSaving(false)}}
+ return <main className="page-shell"><div className="page-header"><Link className="back-link" href="/"><ArrowLeft size={19}/>Tilbake</Link><div><p className="eyebrow">NY ORDRE</p><h1>Legg til hjemlevering</h1></div></div>
+ <div className="order-source-tabs"><button type="button" className={!click?"active":""} onClick={()=>setMode("STANDARD")}><FileText size={19}/>Kundeordre / PDF</button><button type="button" className={click?"active":""} onClick={()=>setMode("CLICK_AND_COLLECT")}><ClipboardPaste size={19}/>Klikk & Hent</button></div>
+ <form className="form-card" onSubmit={submit}><div className="clipboard-upload-zone" tabIndex={0} onPaste={paste} onDrop={drop} onDragOver={e=>e.preventDefault()} onClick={()=>inputRef.current?.click()}>{preview?<img src={preview} alt="Ordrelapp"/>:<div className="clipboard-upload-copy">{click?<ClipboardPaste size={34}/>:<FileUp size={34}/>}<strong>{click?"Lim inn ordrelappen med Ctrl+V":"Velg PDF eller bilde"}</strong><p>{click?"Dra inn skjermbilde, velg bilde eller bruk kamera.":"PDF tolkes automatisk."}</p></div>}<input ref={inputRef} type="file" accept={click?"image/*":"application/pdf,image/*"} capture={click?"environment":undefined} onChange={(e:ChangeEvent<HTMLInputElement>)=>selectFile(e.target.files?.[0]??null)}/></div>
+ <div className="form-grid"><label>Ordrenummer<input name="orderNumber"/></label><label>Kundenavn<input name="customerName"/></label><label>Telefon<input name="phone" inputMode="tel"/></label><label>Leveringsadresse<input name="deliveryAddress"/></label><label>Leveringsdato<input name="deliveryDate" type="date"/></label><label>Opprettet av<input name="createdBy" required/></label><label className="full">Kommentar<textarea name="comment" rows={3}/></label></div>
+ {click&&<section className="manual-items-editor"><div className="manual-items-heading"><div><h2>Varelinjer</h2><p>Bildet lagres som dokumentasjon. Legg inn det som skal plukkes.</p></div><button type="button" className="outline-action compact" onClick={()=>setLines(c=>[...c,{articleNumber:"",description:"",quantity:"",unit:"Stk"}])}><Plus size={16}/>Legg til vare</button></div><div className="manual-item-list">{lines.map((x,i)=><div className="manual-item-row" key={i}><input placeholder="GTIN / EAN" value={x.articleNumber} onChange={e=>update(i,{articleNumber:e.target.value})}/><input placeholder="Varetekst" value={x.description} onChange={e=>update(i,{description:e.target.value})}/><input placeholder="Antall" value={x.quantity} onChange={e=>update(i,{quantity:e.target.value})}/><select value={x.unit} onChange={e=>update(i,{unit:e.target.value})}><option>Stk</option><option>Meter</option><option>M</option><option>Pk</option></select><button type="button" onClick={()=>setLines(c=>c.length===1?c:c.filter((_,n)=>n!==i))}><Trash2 size={17}/></button></div>)}</div></section>}
+ {click&&<div className="click-collect-note">Klikk & Hent får full plukkeflyt, men ingen Waypoint/Outlook-knapp.</div>}{error&&<div className="error-box">{error}</div>}<button className="primary-button large" disabled={saving}><Camera size={19}/>{saving?"Oppretter …":"Opprett ordre"}</button></form></main>
 }

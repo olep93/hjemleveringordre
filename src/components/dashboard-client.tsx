@@ -46,7 +46,7 @@ type Order = {
 const statusLabel: Record<OrderStatus, string> = {
   TO_PICK: "Må plukkes",
   PICKING: "Under plukking",
-  READY_FOR_LOADING: "Klar for lasting",
+  READY_FOR_LOADING: "Ferdig plukket",
   LOADED: "Lastet på bil",
   DELIVERED: "Levert",
   ARCHIVED: "Arkivert",

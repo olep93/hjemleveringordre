@@ -400,7 +400,7 @@ async function enrichOne(
   const productLookupAt = new Date().toISOString();
   const ean = item.articleNumber?.trim();
 
-  if (!ean || item.isFreight) {
+  if (!ean || !/^\d{12,14}$/.test(ean) || item.isFreight) {
     return {
       ...item,
       productName: existing?.productName ?? null,

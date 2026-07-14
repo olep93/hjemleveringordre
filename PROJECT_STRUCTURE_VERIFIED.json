@@ -1,13 +1,14 @@
 {
   "project": "Hjemleveringordre",
-  "version": "1.7.0",
+  "version": "1.8.0",
   "completeSrcFolder": true,
-  "includesAllFrom": "1.6.0",
+  "includesAllFrom": "1.7.0",
   "features": [
-    "five-second validation toast",
-    "automatic scroll to first missing field",
-    "red placement validation",
-    "red photo validation",
-    "red incomplete item rows"
+    "delivery choice",
+    "Outlook web template",
+    "secure pickup package",
+    "Click & Collect paste/camera",
+    "open PLU cleanup",
+    "location code"
   ]
 }

@@ -4,6 +4,7 @@ export type ParsedOrderItem = {
   id: string;
   articleNumber: string | null;
   description: string;
+  rawDescription: string | null;
   bestNumber: string | null;
   quantity: number;
   unit: string | null;
@@ -34,7 +35,7 @@ type PositionedText = {
   y: number;
 };
 
-const PARSER_VERSION = "obsbygg-mupdf-coordinates-v7-address-phone";
+const PARSER_VERSION = "obsbygg-mupdf-v8-open-plu";
 
 function clean(value?: string | null): string {
   return String(value ?? "")
@@ -319,6 +320,18 @@ function isDate(value: string): boolean {
   return /^\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4}$/.test(value);
 }
 
+function normalizeOpenPluDescription(value: string): {
+  description: string;
+  rawDescription: string | null;
+  isOpenPlu: boolean;
+} {
+  const original = clean(value);
+  const match = original.match(/^(?:ÅPEN|APEN)\s+PLU\s+(.+)$/i);
+  return match
+    ? { description: clean(match[1]), rawDescription: original, isOpenPlu: true }
+    : { description: original, rawDescription: null, isOpenPlu: false };
+}
+
 function parseItemRow(row: string, index: number): ParsedOrderItem | null {
   const eanMatch = clean(row).match(/^(\d{6,14})\s+(.+)$/);
   if (!eanMatch) return null;
@@ -351,7 +364,10 @@ function parseItemRow(row: string, index: number): ParsedOrderItem | null {
   if (bestNumberIndex < 1) return null;
 
   const bestNumber = tokens[bestNumberIndex];
-  const description = clean(tokens.slice(0, bestNumberIndex).join(" "));
+  const parsedDescription = normalizeOpenPluDescription(
+    tokens.slice(0, bestNumberIndex).join(" ")
+  );
+  const description = parsedDescription.description;
   if (!description) return null;
 
   const numericAfterUnit = tokens
@@ -369,8 +385,9 @@ function parseItemRow(row: string, index: number): ParsedOrderItem | null {
 
   return {
     id: `${articleNumber}-${index + 1}`,
-    articleNumber,
+    articleNumber: parsedDescription.isOpenPlu ? null : articleNumber,
     description,
+    rawDescription: parsedDescription.rawDescription,
     bestNumber,
     quantity: parseDecimal(quantity) ?? 1,
     unit,

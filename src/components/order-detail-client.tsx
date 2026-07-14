@@ -15,6 +15,7 @@ import {
   FileText,
   Info,
   Lock,
+  Mail,
   MapPin,
   PackageCheck,
   Play,
@@ -36,6 +37,7 @@ type Item = {
   articleNumber?: string | null;
   bestNumber?: string | null;
   description: string;
+  rawDescription?: string | null;
   productName?: string | null;
   productUrl?: string | null;
   productImageUrl?: string | null;
@@ -58,6 +60,12 @@ type Order = {
   createdAt?: string | null;
   status: string;
   placement?: string | null;
+  locationCode?: string | null;
+  fulfillmentMethod?: "THIS_THURSDAY" | "NEXT_THURSDAY" | "OWN_VEHICLE" | null;
+  pickupDate?: string | null;
+  pickupRecipientEmail?: string | null;
+  pickupShareToken?: string | null;
+  source?: string | null;
   pickedBy?: string | null;
   comment?: string | null;
   originalDocumentUrl?: string | null;
@@ -128,6 +136,11 @@ export default function OrderPage({
   const [placement, setPlacement] = useState("");
   const [comment, setComment] = useState("");
   const [deliveryDate, setDeliveryDate] = useState("");
+  const [locationCode, setLocationCode] = useState("");
+  const [showFulfillment, setShowFulfillment] = useState(false);
+  const [fulfillmentMethod, setFulfillmentMethod] = useState<"THIS_THURSDAY" | "NEXT_THURSDAY" | "OWN_VEHICLE">("THIS_THURSDAY");
+  const [pickupDate, setPickupDate] = useState("");
+  const [pickupRecipientEmail, setPickupRecipientEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -151,6 +164,10 @@ export default function OrderPage({
     setPlacement(nextOrder.placement ?? "");
     setComment(nextOrder.comment ?? "");
     setDeliveryDate(nextOrder.deliveryDate ?? "");
+    setLocationCode(nextOrder.locationCode ?? "");
+    setFulfillmentMethod(nextOrder.fulfillmentMethod ?? "THIS_THURSDAY");
+    setPickupDate(nextOrder.pickupDate ?? "");
+    setPickupRecipientEmail(nextOrder.pickupRecipientEmail ?? window.localStorage.getItem("waypointEmail") ?? "");
   }, []);
 
   const load = useCallback(async () => {
@@ -277,6 +294,7 @@ export default function OrderPage({
 
     const missingPlacement = !placement.trim();
     const missingPhoto = (order.photos ?? []).length === 0;
+    const missingLocationCode = placement === "Kasse Drive-In" && !locationCode.trim();
 
     const missing: string[] = [];
     if (missingItemIds.length > 0) {
@@ -288,6 +306,7 @@ export default function OrderPage({
     }
     if (missingPlacement) missing.push("plassering er ikke valgt");
     if (missingPhoto) missing.push("bilde av ferdig ordre mangler");
+    if (missingLocationCode) missing.push("lokasjonskode ved kasse mangler");
 
     if (missing.length === 0) {
       clearValidationFeedback();
@@ -305,6 +324,11 @@ export default function OrderPage({
 
     return false;
   }
+
+  function inputDate(date: Date) { return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`; }
+  function thursday(weeks:number){const t=new Date();const monday=(t.getDay()+6)%7;const d=new Date(t);d.setDate(t.getDate()-monday+3+weeks*7);return inputDate(d)}
+  function beginFinalize(){if(!validateBeforeFinalize())return;setPickupDate(fulfillmentMethod==="NEXT_THURSDAY"?thursday(1):fulfillmentMethod==="THIS_THURSDAY"?thursday(0):pickupDate);setShowFulfillment(true)}
+  function openOutlookTemplate(current:Order){if(current.source==="CLICK_AND_COLLECT")return;const to=current.pickupRecipientEmail||pickupRecipientEmail.trim();if(!to){showValidationFeedback("Skriv inn e-postadressen til Waypoint.",{});return}window.localStorage.setItem("waypointEmail",to);const share=current.pickupShareToken?`${window.location.origin}/pickup/${current.id}?token=${encodeURIComponent(current.pickupShareToken)}`:`${window.location.origin}/orders/${current.id}`;const lines=(current.items??[]).filter(x=>!x.isFreight).map(x=>`- ${x.productName??x.description}: ${x.quantity} ${x.unit??""}`).join("\n");const body=["Hei,","",`Følgende ordre er ferdig plukket:`,current.title,"",`Dato: ${current.pickupDate??""}`,`Plassering: ${current.placement??""}${current.locationCode?` – ${current.locationCode}`:""}`,`Kunde: ${current.customerName??""}`,`Adresse: ${current.deliveryAddress??""}`,`Telefon: ${current.phone??""}`,"","Kommentar fra plukking:",current.comment??"Ingen kommentar","","Varelinjer:",lines,"","Original kundeordre og bilder:",share,"","Med vennlig hilsen","Obs BYGG Tønsberg"].join("\n");const u=new URL("https://outlook.office.com/mail/deeplink/compose");u.searchParams.set("to",to);u.searchParams.set("subject",`${current.title} – ${current.pickupDate??""}`);u.searchParams.set("body",body);window.open(u.toString(),"_blank","noopener,noreferrer")}
 
   async function savePicking(finalize: boolean) {
     if (!order || !actorName) return;
@@ -325,7 +349,11 @@ export default function OrderPage({
           deliveryDate: deliveryDate || null,
           comment: comment || null,
           itemChecks: itemChecks(),
-          pickingSessionEnded: true
+          pickingSessionEnded: true,
+          fulfillmentMethod: finalize ? fulfillmentMethod : undefined,
+          pickupDate: finalize ? pickupDate : undefined,
+          pickupRecipientEmail: finalize && order.source !== "CLICK_AND_COLLECT" ? pickupRecipientEmail : undefined,
+          locationCode: placement === "Kasse Drive-In" ? locationCode : null
         })
       });
 
@@ -335,6 +363,7 @@ export default function OrderPage({
       }
 
       clearValidationFeedback();
+      setShowFulfillment(false);
       setPickingMode(false);
       setInfo(
         finalize
@@ -706,6 +735,8 @@ export default function OrderPage({
                   </div>
                 </label>
 
+                {placement === "Kasse Drive-In" && <label>Lokasjonskode ved kasse<input value={locationCode} placeholder="F.eks. B2" onChange={(event)=>setLocationCode(event.target.value)}/></label>}
+
                 <label className="full">
                   Kommentar
                   <textarea
@@ -783,7 +814,7 @@ export default function OrderPage({
                 <button
                   className="green-action finalize-action"
                   disabled={saving}
-                  onClick={() => void savePicking(true)}
+                  onClick={beginFinalize}
                 >
                   <CheckCircle2 size={18} /> Ferdigstill ordre
                 </button>
@@ -913,9 +944,7 @@ export default function OrderPage({
                             <strong>{item.productName ?? item.description}</strong>
                           )}
                         </div>
-                        {item.productName && (
-                          <p>Ordretekst: {item.description}</p>
-                        )}
+                        {(item.productName || item.rawDescription) && <p>Radtekst: {item.rawDescription ?? item.description}</p>}
                         <div className="product-tags">
                           {item.articleNumber && (
                             <span>EAN {item.articleNumber}</span>
@@ -950,6 +979,9 @@ export default function OrderPage({
           </section>
         </div>
 
+        {(order.photos ?? []).length > 0 && <section className="modern-card history-card-spacing"><div className="modern-card-title"><span className="title-icon"><Camera size={21}/></span><h2>Bilder av ferdig plukket ordre</h2></div><div className="photo-grid persisted-picking-photos">{(order.photos??[]).map((photo,index)=>photo.url?<figure key={index}><a href={photo.url} target="_blank"><img src={photo.url} alt="Plukkebilde"/></a><figcaption>{photo.uploadedBy??"Ukjent"}</figcaption></figure>:null)}</div></section>}
+        {!pickingMode && order.status === "READY_FOR_LOADING" && order.source !== "CLICK_AND_COLLECT" && <section className="modern-card history-card-spacing outlook-handoff-card"><div><p className="eyebrow">WAYPOINT / TRANSPORT</p><h2>Åpne ferdig hentemal i Outlook</h2><p>Malen inneholder plukkekommentar, varelinjer, dato, plassering og lenke til dokumenter og bilder.</p></div><button className="blue-action" onClick={()=>openOutlookTemplate(order)}><Mail size={18}/>Åpne i Outlook på web</button></section>}
+
         <section className="modern-card history-card-spacing">
           <div className="modern-card-title">
             <span className="title-icon"><PackageCheck size={21} /></span>
@@ -967,6 +999,7 @@ export default function OrderPage({
             ))}
           </div>
         </section>
+        {showFulfillment && <div className="modal-backdrop"><div className="fulfillment-modal"><div className="modal-heading"><div><p className="eyebrow">SISTE STEG</p><h2>Velg utkjøring eller henting</h2></div><button type="button" onClick={()=>setShowFulfillment(false)}><X size={20}/></button></div><div className="fulfillment-options"><button type="button" className={fulfillmentMethod==="THIS_THURSDAY"?"selected":""} onClick={()=>{setFulfillmentMethod("THIS_THURSDAY");setPickupDate(thursday(0))}}><Truck size={20}/><strong>Torsdag inneværende uke</strong><span>{thursday(0)}</span></button><button type="button" className={fulfillmentMethod==="NEXT_THURSDAY"?"selected":""} onClick={()=>{setFulfillmentMethod("NEXT_THURSDAY");setPickupDate(thursday(1))}}><Truck size={20}/><strong>Torsdag neste uke</strong><span>{thursday(1)}</span></button><button type="button" className={fulfillmentMethod==="OWN_VEHICLE"?"selected":""} onClick={()=>setFulfillmentMethod("OWN_VEHICLE")}><Box size={20}/><strong>Egen bil</strong><span>Velg egen dato</span></button></div><label>Dato<input type="date" value={pickupDate} onChange={e=>setPickupDate(e.target.value)}/></label>{order.source!=="CLICK_AND_COLLECT"&&<label>E-post til Waypoint / transport<input type="email" value={pickupRecipientEmail} onChange={e=>setPickupRecipientEmail(e.target.value)}/></label>}<div className="modal-actions"><button className="outline-action" type="button" onClick={()=>setShowFulfillment(false)}>Tilbake</button><button className="green-action" type="button" disabled={saving||!pickupDate||(order.source!=="CLICK_AND_COLLECT"&&fulfillmentMethod!=="OWN_VEHICLE"&&!pickupRecipientEmail.trim())} onClick={()=>void savePicking(true)}><CheckCircle2 size={18}/>Ferdigstill ordre</button></div></div></div>}
       </section>
     </main>
   );
