@@ -1,4 +1,4 @@
-# Hjemleveringordre V1.9.1 – forbedret Klikk & Hent-skanner og generiske PLU
+# Hjemleveringordre V1.9.2 – forbedret Klikk & Hent-skanner og generiske PLU
 
 Komplett versjon med alt fra V1.8.
 
@@ -68,3 +68,13 @@ OCR-ruten sender nå en Node.js `Buffer` til Tesseract i stedet for
 `Uint8Array`. Dette retter TypeScript-feilen i Vercel-builden:
 
 `Uint8Array<ArrayBuffer> is not assignable to ImageLike`
+
+
+## TypeScript-buildfix 1.9.2
+
+Manuelt opprettede varelinjer inkluderer nå de obligatoriske feltene:
+
+- `lineComment`
+- `identifierType`
+
+Dette retter Vercel-feilen der objektet ikke kunne tilordnes `ParsedOrderItem[]`.

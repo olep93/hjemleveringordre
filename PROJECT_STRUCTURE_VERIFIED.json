@@ -1,6 +1,6 @@
 {
   "project": "Hjemleveringordre",
-  "version": "1.9.1",
+  "version": "1.9.2",
   "completeSrcFolder": true,
   "includesAllFrom": "1.8.0",
   "features": [
@@ -12,5 +12,9 @@
     "PLU line comments preserved",
     "no Obsbygg lookup for PLU"
   ],
-  "buildFix": "Tesseract recognize now receives Buffer"
+  "buildFix": "Tesseract recognize now receives Buffer",
+  "buildFixes": [
+    "Tesseract recognize receives Node Buffer",
+    "Manual ParsedOrderItem includes lineComment and identifierType"
+  ]
 }

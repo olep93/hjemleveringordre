@@ -44,6 +44,14 @@ export async function POST(request: NextRequest) {
           articleNumber: open || !/^\d{12,14}$/.test(String(x.articleNumber ?? "")) ? null : String(x.articleNumber),
           description: open ? open[1].trim() : raw,
           rawDescription: open ? raw : null,
+          lineComment: null,
+          identifierType:
+            open ||
+            !/^\d{12,14}$/.test(
+              String(x.articleNumber ?? "").trim()
+            )
+              ? "PLU"
+              : "EAN",
           bestNumber: null,
           quantity: Number(x.quantity) || 1,
           unit: String(x.unit ?? "Stk"),
