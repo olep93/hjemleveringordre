@@ -31,9 +31,8 @@ export async function POST(request: NextRequest) {
     const worker = await createWorker("eng");
 
     try {
-      const result = await worker.recognize(
-        new Uint8Array(await file.arrayBuffer())
-      );
+      const imageBuffer = Buffer.from(await file.arrayBuffer());
+      const result = await worker.recognize(imageBuffer);
 
       return NextResponse.json({
         ok: true,

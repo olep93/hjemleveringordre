@@ -1,4 +1,4 @@
-# Hjemleveringordre V1.9 – forbedret Klikk & Hent-skanner og generiske PLU
+# Hjemleveringordre V1.9.1 – forbedret Klikk & Hent-skanner og generiske PLU
 
 Komplett versjon med alt fra V1.8.
 
@@ -60,3 +60,11 @@ Slett innholdet i GitHub-repositoryet og last opp hele den utpakkede pakken til
 roten. Behold Vercel-prosjekt, miljøvariabler, Blob Store, Firebase og Resend.
 
 Første Vercel-bygg installerer den nye avhengigheten `tesseract.js`.
+
+
+## Buildfix 1.9.1
+
+OCR-ruten sender nå en Node.js `Buffer` til Tesseract i stedet for
+`Uint8Array`. Dette retter TypeScript-feilen i Vercel-builden:
+
+`Uint8Array<ArrayBuffer> is not assignable to ImageLike`
