@@ -13,6 +13,8 @@ type NotificationItem = {
   quantity?: number | string | null;
   unit?: string | null;
   articleNumber?: string | null;
+  lineComment?: string | null;
+  identifierType?: "EAN" | "PLU" | null;
   isFreight?: boolean;
 };
 
@@ -45,17 +47,23 @@ export function formatOrderItemsHtml(
     .map((item) => {
       const name = item.productName || item.description || "Ukjent vare";
       const amount = `${item.quantity ?? "–"} ${item.unit ?? ""}`.trim();
-      const ean = item.articleNumber
-        ? `<div style="color:#64748b;font-size:12px;margin-top:3px;">EAN ${escapeHtml(
-            item.articleNumber
-          )}</div>`
+      const identifier = item.articleNumber
+        ? `<div style="color:#64748b;font-size:12px;margin-top:3px;">${
+            item.identifierType === "PLU" ? "PLU" : "EAN"
+          } ${escapeHtml(item.articleNumber)}</div>`
+        : "";
+      const comment = item.lineComment
+        ? `<div style="color:#7c5a15;font-size:12px;margin-top:5px;">${escapeHtml(
+            item.lineComment
+          ).replace(/\n/g, "<br/>")}</div>`
         : "";
 
       return `
         <tr>
           <td style="padding:10px 12px;border-bottom:1px solid #e2e8f0;">
             <strong>${escapeHtml(name)}</strong>
-            ${ean}
+            ${identifier}
+            ${comment}
           </td>
           <td style="padding:10px 12px;border-bottom:1px solid #e2e8f0;text-align:right;white-space:nowrap;">
             <strong>${escapeHtml(amount)}</strong>

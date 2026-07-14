@@ -5,6 +5,8 @@ export type ParsedOrderItem = {
   articleNumber: string | null;
   description: string;
   rawDescription: string | null;
+  lineComment: string | null;
+  identifierType: "EAN" | "PLU" | null;
   bestNumber: string | null;
   quantity: number;
   unit: string | null;
@@ -35,7 +37,7 @@ type PositionedText = {
   y: number;
 };
 
-const PARSER_VERSION = "obsbygg-mupdf-v8-open-plu";
+const PARSER_VERSION = "obsbygg-mupdf-v9-generic-plu-comments";
 
 function clean(value?: string | null): string {
   return String(value ?? "")
@@ -388,12 +390,80 @@ function parseItemRow(row: string, index: number): ParsedOrderItem | null {
     articleNumber: parsedDescription.isOpenPlu ? null : articleNumber,
     description,
     rawDescription: parsedDescription.rawDescription,
+    lineComment: null,
+    identifierType:
+      parsedDescription.isOpenPlu || articleNumber.length < 12 ? "PLU" : "EAN",
     bestNumber,
     quantity: parseDecimal(quantity) ?? 1,
     unit,
     deliveredQuantity: parseDecimal(deliveredQuantity),
     price: parseDecimal(price),
     lineTotal: parseDecimal(lineTotal),
+    checked: isFreight,
+    checkedBy: isFreight ? "SYSTEM" : null,
+    checkedAt: isFreight ? new Date().toISOString() : null,
+    isFreight
+  };
+}
+
+function isTableEnd(row: string): boolean {
+  return /^(SUM|TOTALSUM|TOTAL SUM)\b/i.test(clean(row));
+}
+
+function isLikelyNewItemRow(row: string): boolean {
+  return /^\d{4,14}\s+/.test(clean(row));
+}
+
+function parseGenericPluRow(
+  row: string,
+  followingRows: string[],
+  index: number
+): ParsedOrderItem | null {
+  const match = clean(row).match(/^(\d{4,6})\s+(.+)$/);
+  if (!match) return null;
+
+  const plu = match[1];
+  const rest = clean(match[2]);
+  const tokens = rest.split(" ").filter(Boolean);
+
+  let bestNumber: string | null = null;
+  if (/^\d{5,10}$/.test(tokens.at(-1) ?? "")) {
+    bestNumber = tokens.pop() ?? null;
+  }
+
+  const description = clean(tokens.join(" "));
+  if (!description) return null;
+
+  const comments: string[] = [];
+
+  for (const candidate of followingRows) {
+    const current = clean(candidate);
+    if (
+      !current ||
+      isTableEnd(current) ||
+      isLikelyNewItemRow(current) ||
+      /^(EAN\/PLU|Varetekst|Bestnr)\b/i.test(current)
+    ) {
+      break;
+    }
+    comments.push(current);
+  }
+
+  const isFreight = /frakt/i.test(description);
+
+  return {
+    id: `plu-${plu}-${index + 1}`,
+    articleNumber: plu,
+    description,
+    rawDescription: null,
+    lineComment: comments.length > 0 ? comments.join("\n") : null,
+    identifierType: "PLU",
+    bestNumber,
+    quantity: 1,
+    unit: "Stk",
+    deliveredQuantity: null,
+    price: null,
+    lineTotal: null,
     checked: isFreight,
     checkedBy: isFreight ? "SYSTEM" : null,
     checkedAt: isFreight ? new Date().toISOString() : null,
@@ -408,12 +478,47 @@ function parseRows(rows: string[]): ParsedOrderItem[] {
 
   const candidates = tableStart >= 0 ? rows.slice(tableStart + 1) : rows;
   const items: ParsedOrderItem[] = [];
+  let index = 0;
 
-  for (const row of candidates) {
-    if (/^(SUM|TOTALSUM|TOTAL SUM)\b/i.test(row)) break;
+  while (index < candidates.length) {
+    const row = candidates[index];
+    if (isTableEnd(row)) break;
 
-    const item = parseItemRow(row, items.length);
-    if (item) items.push(item);
+    const normalItem = parseItemRow(row, items.length);
+    if (normalItem) {
+      items.push(normalItem);
+      index += 1;
+      continue;
+    }
+
+    const pluItem = parseGenericPluRow(
+      row,
+      candidates.slice(index + 1, index + 5),
+      items.length
+    );
+
+    if (pluItem) {
+      items.push(pluItem);
+
+      let consumedComments = 0;
+      for (const candidate of candidates.slice(index + 1, index + 5)) {
+        const current = clean(candidate);
+        if (
+          !current ||
+          isTableEnd(current) ||
+          isLikelyNewItemRow(current) ||
+          /^(EAN\/PLU|Varetekst|Bestnr)\b/i.test(current)
+        ) {
+          break;
+        }
+        consumedComments += 1;
+      }
+
+      index += 1 + consumedComments;
+      continue;
+    }
+
+    index += 1;
   }
 
   return items;

@@ -1,14 +1,15 @@
 {
   "project": "Hjemleveringordre",
-  "version": "1.8.0",
+  "version": "1.9.0",
   "completeSrcFolder": true,
-  "includesAllFrom": "1.7.0",
+  "includesAllFrom": "1.8.0",
   "features": [
-    "delivery choice",
-    "Outlook web template",
-    "secure pickup package",
-    "Click & Collect paste/camera",
-    "open PLU cleanup",
-    "location code"
+    "automatic OCR for Click & Collect images",
+    "header-based Click & Collect product names",
+    "GTIN and quantity extraction",
+    "category row exclusion",
+    "generic short PLU support",
+    "PLU line comments preserved",
+    "no Obsbygg lookup for PLU"
   ]
 }

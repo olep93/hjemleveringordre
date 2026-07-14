@@ -38,6 +38,8 @@ type Item = {
   bestNumber?: string | null;
   description: string;
   rawDescription?: string | null;
+  lineComment?: string | null;
+  identifierType?: "EAN" | "PLU" | null;
   productName?: string | null;
   productUrl?: string | null;
   productImageUrl?: string | null;
@@ -947,7 +949,10 @@ export default function OrderPage({
                         {(item.productName || item.rawDescription) && <p>Radtekst: {item.rawDescription ?? item.description}</p>}
                         <div className="product-tags">
                           {item.articleNumber && (
-                            <span>EAN {item.articleNumber}</span>
+                            <span>
+                              {item.identifierType === "PLU" ? "PLU" : "EAN"}{" "}
+                              {item.articleNumber}
+                            </span>
                           )}
                           {item.bestNumber && (
                             <span>Best.nr {item.bestNumber}</span>

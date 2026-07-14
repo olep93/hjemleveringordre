@@ -1,6 +1,6 @@
 {
   "name": "hjemleveringordre",
-  "version": "1.8.0",
+  "version": "1.9.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -16,7 +16,8 @@
     "react-dom": "^19.0.0",
     "resend": "^6.0.0",
     "@vercel/blob": "^2.3.0",
-    "mupdf": "^1.28.0"
+    "mupdf": "^1.28.0",
+    "tesseract.js": "^6.0.1"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

@@ -1,16 +1,62 @@
-# Hjemleveringordre V1.8
+# Hjemleveringordre V1.9 – forbedret Klikk & Hent-skanner og generiske PLU
 
-Komplett pakke med alt fra V1.7, pluss:
+Komplett versjon med alt fra V1.8.
 
-- utkjøring torsdag inneværende uke / neste uke / egen bil med dato
-- Outlook på web med ferdig e-postmal uten Microsoft Graph
-- sikker hentepakke med original kundeordre og plukkebilder
-- plukkekommentar følger med i Outlook-malen
-- bilder vises etter plukking
-- ÅPEN PLU fjernes fra visningsnavnet, mens original radtekst beholdes
-- Klikk & Hent kan limes inn med Ctrl+V, dras inn, velges eller fotograferes
-- Klikk & Hent har manuelle varelinjer og ingen Waypoint-knapp
-- Kasse Drive-In gir felt for lokasjonskode, f.eks. B2
+## Klikk & Hent-skanner
+
+Når et bilde velges, limes inn eller tas med kamera, kjøres OCR automatisk.
+
+Skanneren forsøker å hente:
+
+- ordrenummer
+- kundenavn
+- adresse og poststed
+- telefon
+- GTIN/EAN
+- varenavn fra produktoverskriften
+- modell som alternativ hjelpetekst
+- enhet og antall
+
+Kategorier som `Konstruksjonsvirke` og `Terrasse` ignoreres.
+
+Eksempel:
+
+- overskrift: `48x98 K-Virke Imp C24`
+- GTIN: `7040431878659`
+- modell: `MOELVEN KVIRKE 48X98 FURU C24 IMP L`
+- antall: `130 Meter`
+
+Skanneren fyller inn redigerbare felt. Brukeren skal kontrollere resultatet før
+ordren opprettes.
+
+## Generiske PLU-linjer
+
+Korte PLU-er som:
+
+- `20032 BYGGEVARER`
+- `90646 VINDUER`
+
+blir ikke søkt opp på Obsbygg.no.
+
+Appen beholder:
+
+- PLU-nummer
+- varetekst
+- kommentaren i de etterfølgende radene
+
+Eksempel:
+
+`90646 VINDUER`
+
+Kommentar:
+
+`Tilbud #11465313`
+
+Kommentaren vises i plukklisten og følger med i e-postvarsler.
 
 ## Opplasting
-Slett alt innhold i GitHub-repositoryet og last opp hele innholdet i ZIP-filen til roten. Behold Vercel, miljøvariabler, Blob Store, Firebase og Resend.
+
+Slett innholdet i GitHub-repositoryet og last opp hele den utpakkede pakken til
+roten. Behold Vercel-prosjekt, miljøvariabler, Blob Store, Firebase og Resend.
+
+Første Vercel-bygg installerer den nye avhengigheten `tesseract.js`.
