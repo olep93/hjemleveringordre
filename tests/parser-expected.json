@@ -1,0 +1,28 @@
+{
+  "orderNumber": "1549",
+  "customerName": "Transportordre Ordresen",
+  "orderDate": "11-07-26",
+  "items": [
+    {
+      "articleNumber": "7040431878659",
+      "description": "48X98 IMP K-VIRKE",
+      "bestNumber": "5823471",
+      "quantity": 500,
+      "unit": "M"
+    },
+    {
+      "articleNumber": "7025180718555",
+      "description": "INFRA STØP B20 20KG",
+      "bestNumber": "7210240",
+      "quantity": 15,
+      "unit": "Stk"
+    },
+    {
+      "articleNumber": "7040437512038",
+      "description": "28X120 IMP TERRASSEB",
+      "bestNumber": "5823893",
+      "quantity": 200,
+      "unit": "M"
+    }
+  ]
+}

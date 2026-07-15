@@ -1,0 +1,13 @@
+{
+  "project": "Hjemleveringordre",
+  "version": "2.1.0",
+  "completeSrcFolder": true,
+  "includesAllFrom": "2.0.1",
+  "features": [
+    "sharp preprocessing",
+    "EXIF autorotate",
+    "90 degree retry",
+    "robust click collect parser",
+    "scan timeout"
+  ]
+}
