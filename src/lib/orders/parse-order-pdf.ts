@@ -37,7 +37,7 @@ type PositionedText = {
   y: number;
 };
 
-const PARSER_VERSION = "obsbygg-mupdf-v10-safe-table-boundary";
+const PARSER_VERSION = "obsbygg-mupdf-v11-open-plu-canonical";
 
 function clean(value?: string | null): string {
   return String(value ?? "")
@@ -414,35 +414,90 @@ function isLikelyNewItemRow(row: string): boolean {
   return /^\d{4,14}\s+/.test(clean(row));
 }
 
+
+const KNOWN_OPEN_PLU: Record<string, string> = {
+  "20032": "BYGGEVARER",
+  "29034": "FRAKT",
+  "90646": "VINDUER"
+};
+
+function normalizeGenericPluDescription(
+  plu: string,
+  value: string
+): {
+  description: string;
+  rawDescription: string | null;
+} {
+  const original = clean(value);
+  const withoutPrefix = original
+    .replace(/^(?:ÅPEN|APEN)\s+PLU\s+/i, "")
+    .trim();
+
+  return {
+    description: KNOWN_OPEN_PLU[plu] ?? withoutPrefix,
+    rawDescription: withoutPrefix !== original ? original : null
+  };
+}
+
 function parseGenericPluRow(
   row: string,
   followingRows: string[],
   index: number
 ): ParsedOrderItem | null {
-  const match = clean(row).match(/^(\d{4,6})\s+(.+)$/);
-  if (!match) return null;
+  const normalized = clean(row);
+  const first = normalized.match(/^(\d{4,6})\s+(.+)$/);
+  if (!first) return null;
 
-  const plu = match[1];
-  const rest = clean(match[2]);
-  const tokens = rest.split(" ").filter(Boolean);
+  const plu = first[1];
+  const remainder = first[2];
+  const tokens = remainder.split(/\s+/);
 
   let bestNumber: string | null = null;
-  if (/^\d{5,10}$/.test(tokens.at(-1) ?? "")) {
-    bestNumber = tokens.pop() ?? null;
+  let descriptionEnd = tokens.length;
+
+  for (let i = 1; i < tokens.length; i++) {
+    if (/^\d{5,10}$/.test(tokens[i])) {
+      bestNumber = tokens[i];
+      descriptionEnd = i;
+      break;
+    }
   }
 
-  const description = clean(tokens.join(" "));
+  let extractedDescription = clean(
+    tokens.slice(0, descriptionEnd).join(" ")
+  );
+  extractedDescription = extractedDescription
+    .replace(/\s+\d{2}\/\d{2}\/\d{2,4}.*$/i, "")
+    .replace(/\s+\d+(?:[.,]\d+)?\s+(?:Stk|M|Meter|Pk|Sett).*$/i, "")
+    .trim();
+
+  const normalizedDescription = normalizeGenericPluDescription(
+    plu,
+    extractedDescription
+  );
+  const description = normalizedDescription.description;
+
   if (!description) return null;
 
-  const comments: string[] = [];
+  let quantity = 1;
+  let unit = "Stk";
 
+  const unitMatch = normalized.match(
+    /\s(\d+(?:[.,]\d+)?)\s+(Stk|M|Meter|Pk|Sett)\b/i
+  );
+  if (unitMatch) {
+    quantity = Number(unitMatch[1].replace(",", "."));
+    unit = clean(unitMatch[2]);
+  }
+
+  const comments: string[] = [];
   for (const candidate of followingRows) {
     const current = clean(candidate);
     if (
       !current ||
       isTableEnd(current) ||
       isLikelyNewItemRow(current) ||
-      /^(EAN\/PLU|Varetekst|Bestnr)\b/i.test(current)
+      /^(EAN\/PLU|Varetekst|Bestnr|Lev\.dato|Best\. ant\.|Lev\.ant\.|Pris|Rabattkr|Sum|Kommentar:|Kundeordre|Kunde:|Leveringsadr|Mobiltelefon|Selger:)\b/i.test(current)
     ) {
       break;
     }
@@ -455,12 +510,12 @@ function parseGenericPluRow(
     id: `plu-${plu}-${index + 1}`,
     articleNumber: plu,
     description,
-    rawDescription: null,
-    lineComment: comments.length > 0 ? comments.join("\n") : null,
+    rawDescription: normalizedDescription.rawDescription,
+    lineComment: comments.length ? comments.join("\n") : null,
     identifierType: "PLU",
     bestNumber,
-    quantity: 1,
-    unit: "Stk",
+    quantity: Number.isFinite(quantity) && quantity > 0 ? quantity : 1,
+    unit,
     deliveredQuantity: null,
     price: null,
     lineTotal: null,
@@ -512,7 +567,7 @@ function parseRows(rows: string[]): ParsedOrderItem[] {
           !current ||
           isTableEnd(current) ||
           isLikelyNewItemRow(current) ||
-          /^(EAN\/PLU|Varetekst|Bestnr)\b/i.test(current)
+          /^(EAN\/PLU|Varetekst|Bestnr|Lev\.dato|Best\. ant\.|Lev\.ant\.|Pris|Rabattkr|Sum|Kommentar:|Kundeordre|Kunde:|Leveringsadr|Mobiltelefon|Selger:)\b/i.test(current)
         ) {
           break;
         }

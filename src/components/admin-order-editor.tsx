@@ -1,6 +1,6 @@
 "use client";
 
-import { Pencil, Plus, RotateCcw, Save, Trash2, X } from "lucide-react";
+import { ExternalLink, Image as ImageIcon, Pencil, Plus, RotateCcw, Save, Trash2, X } from "lucide-react";
 import { useState } from "react";
 
 type Item = {
@@ -31,9 +31,11 @@ type Order = {
   locationCode?: string | null;
   comment?: string | null;
   fulfillmentMethod?: "THIS_THURSDAY" | "NEXT_THURSDAY" | "OWN_VEHICLE" | null;
+  transportType?: "STANDARD_CRANE_GROUND" | "LARGE_CRANE" | "VAN" | null;
   pickupDate?: string | null;
   pickupRecipientEmail?: string | null;
   items?: Item[];
+  photos?: Array<{ url?: string; filename?: string; uploadedBy?: string | null }>;
 };
 
 export function AdminOrderEditor({
@@ -72,6 +74,40 @@ export function AdminOrderEditor({
         itemIndex === index ? { ...entry, ...patch } : entry
       )
     }));
+  }
+
+  async function deletePhoto(index: number) {
+    const photo = order.photos?.[index];
+
+    if (
+      !window.confirm(
+        `Slette ${photo?.filename ?? `bilde ${index + 1}`} permanent?`
+      )
+    ) {
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const response = await fetch(
+        `/api/orders/${order.id}/photos/${index}`,
+        { method: "DELETE" }
+      );
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error ?? "Bildet kunne ikke slettes.");
+      }
+
+      await onUpdated();
+      setOpen(false);
+    } catch (error) {
+      window.alert(
+        error instanceof Error ? error.message : "Bildet kunne ikke slettes."
+      );
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function save() {
@@ -153,9 +189,64 @@ export function AdminOrderEditor({
         <label>Leveringsmåte<select value={draft.fulfillmentMethod || ""} onChange={(e)=>field("fulfillmentMethod",(e.target.value || null) as Order["fulfillmentMethod"])}>
           <option value="">Ikke valgt</option><option value="THIS_THURSDAY">Torsdag inneværende uke</option><option value="NEXT_THURSDAY">Torsdag neste uke</option><option value="OWN_VEHICLE">Egen bil</option>
         </select></label>
-        <label>Waypoint-mottaker<input type="email" value={draft.pickupRecipientEmail || ""} onChange={(e)=>field("pickupRecipientEmail",e.target.value)} /></label>
+        <label>Transporttype<select value={draft.transportType || "STANDARD_CRANE_GROUND"} onChange={(e)=>field("transportType",e.target.value as Order["transportType"])}><option value="STANDARD_CRANE_GROUND">Standard kranbil til bakkeplan</option><option value="LARGE_CRANE">Kranbil stor</option><option value="VAN">Varebil</option></select></label><label>Waypoint-mottaker<input type="email" value={draft.pickupRecipientEmail || ""} onChange={(e)=>field("pickupRecipientEmail",e.target.value)} /></label>
         <label className="full">Kommentar<textarea rows={3} value={draft.comment || ""} onChange={(e)=>field("comment",e.target.value)} /></label>
       </div>
+
+      <div className="admin-items-heading">
+        <div>
+          <h3>Bilder av ferdig plukket ordre</h3>
+          <p>Administrator kan åpne eller slette feilaktige bilder.</p>
+        </div>
+      </div>
+
+      {(order.photos ?? []).length > 0 ? (
+        <div className="admin-photo-list">
+          {(order.photos ?? []).map((photo, index) => (
+            <article className="admin-photo-card" key={`${photo.filename}-${index}`}>
+              {photo.url ? (
+                <a href={photo.url} target="_blank" rel="noreferrer">
+                  <img src={photo.url} alt={photo.filename ?? `Bilde ${index + 1}`} />
+                </a>
+              ) : (
+                <div className="admin-photo-placeholder">
+                  <ImageIcon size={28} />
+                </div>
+              )}
+
+              <div className="admin-photo-meta">
+                <strong>{photo.filename ?? `Bilde ${index + 1}`}</strong>
+                <span>Lastet opp av {photo.uploadedBy ?? "ukjent bruker"}</span>
+              </div>
+
+              <div className="admin-photo-actions">
+                {photo.url && (
+                  <a
+                    className="outline-action compact"
+                    href={photo.url}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    <ExternalLink size={15} /> Åpne
+                  </a>
+                )}
+                <button
+                  className="admin-item-delete"
+                  type="button"
+                  disabled={saving}
+                  onClick={() => void deletePhoto(index)}
+                >
+                  <Trash2 size={15} /> Slett bilde
+                </button>
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <div className="admin-empty-photos">
+          Ingen plukkebilder er lagret på ordren.
+        </div>
+      )}
 
       <div className="admin-items-heading">
         <h3>Varelinjer</h3>

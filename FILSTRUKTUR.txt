@@ -1,56 +1,74 @@
-import { NextRequest, NextResponse } from "next/server";
-import { adminDb } from "@/lib/firebase/admin";
-import { hashPassword, requireRole, type UserRole } from "@/lib/auth";
-
-export async function PATCH(
-  request: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) {
-  try {
-    const current = await requireRole(["ADMIN"]);
-    const { id } = await context.params;
-    const body = (await request.json()) as {
-      active?: boolean;
-      displayName?: string;
-      role?: UserRole;
-      password?: string;
-    };
-
-    if (id === current.id && body.active === false) {
-      return NextResponse.json(
-        { error: "Du kan ikke deaktivere din egen bruker." },
-        { status: 400 }
-      );
-    }
-
-    if (
-      body.role &&
-      !["EMPLOYEE", "MANAGER", "ADMIN"].includes(body.role)
-    ) {
-      return NextResponse.json({ error: "Ugyldig rolle." }, { status: 400 });
-    }
-
-    const update: Record<string, unknown> = {
-      updatedAt: new Date().toISOString()
-    };
-
-    if (typeof body.active === "boolean") update.active = body.active;
-    if (body.displayName?.trim()) update.displayName = body.displayName.trim();
-    if (body.role) update.role = body.role;
-    if (body.password !== undefined) {
-      if (body.password.length < 8) {
-        return NextResponse.json(
-          { error: "Passordet må være minst 8 tegn." },
-          { status: 400 }
-        );
-      }
-      update.passwordHash = hashPassword(body.password);
-    }
-
-    await adminDb.collection("users").doc(id).update(update);
-    return NextResponse.json({ ok: true });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Feil";
-    return NextResponse.json({ error: message }, { status: 403 });
-  }
-}
+        .env.example
+        .gitignore
+        FILSTRUKTUR.txt
+        PROJECT_STRUCTURE_VERIFIED.json
+        README.md
+        next-env.d.ts
+        next.config.ts
+        package.json
+[MAPPE] src
+[MAPPE] src/app
+[MAPPE] src/app/admin
+        src/app/admin/page.tsx
+[MAPPE] src/app/api
+[MAPPE] src/app/api/admin
+[MAPPE] src/app/api/admin/notifications
+[MAPPE] src/app/api/admin/notifications/[id]
+        src/app/api/admin/notifications/[id]/route.ts
+        src/app/api/admin/notifications/route.ts
+[MAPPE] src/app/api/admin/users
+[MAPPE] src/app/api/admin/users/[id]
+        src/app/api/admin/users/[id]/route.ts
+        src/app/api/admin/users/route.ts
+[MAPPE] src/app/api/auth
+[MAPPE] src/app/api/auth/guest
+        src/app/api/auth/guest/route.ts
+[MAPPE] src/app/api/auth/login
+        src/app/api/auth/login/route.ts
+[MAPPE] src/app/api/auth/logout
+        src/app/api/auth/logout/route.ts
+[MAPPE] src/app/api/auth/me
+        src/app/api/auth/me/route.ts
+[MAPPE] src/app/api/files
+        src/app/api/files/route.ts
+[MAPPE] src/app/api/orders
+[MAPPE] src/app/api/orders/[id]
+[MAPPE] src/app/api/orders/[id]/items
+[MAPPE] src/app/api/orders/[id]/items/[itemId]
+        src/app/api/orders/[id]/items/[itemId]/route.ts
+[MAPPE] src/app/api/orders/[id]/photos
+        src/app/api/orders/[id]/photos/route.ts
+        src/app/api/orders/[id]/route.ts
+[MAPPE] src/app/api/orders/manual
+        src/app/api/orders/manual/route.ts
+        src/app/api/orders/route.ts
+[MAPPE] src/app/api/resend
+[MAPPE] src/app/api/resend/inbound
+        src/app/api/resend/inbound/route.ts
+        src/app/globals.css
+        src/app/layout.tsx
+[MAPPE] src/app/login
+        src/app/login/page.tsx
+[MAPPE] src/app/orders
+[MAPPE] src/app/orders/[id]
+        src/app/orders/[id]/page.tsx
+[MAPPE] src/app/orders/new
+        src/app/orders/new/page.tsx
+        src/app/page.tsx
+[MAPPE] src/components
+        src/components/app-header.tsx
+        src/components/dashboard-client.tsx
+        src/components/new-order-client.tsx
+        src/components/order-detail-client.tsx
+[MAPPE] src/lib
+        src/lib/auth.ts
+        src/lib/blob-storage.ts
+[MAPPE] src/lib/firebase
+        src/lib/firebase/admin.ts
+        src/lib/notifications.ts
+[MAPPE] src/lib/orders
+        src/lib/orders/delivery-date.ts
+        src/lib/orders/parse-order-pdf.ts
+[MAPPE] tests
+        tests/parser-expected.json
+        tsconfig.json

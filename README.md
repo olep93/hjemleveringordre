@@ -1,43 +1,15 @@
-# Hjemleveringordre V2.6 – åpne og generiske PLU-er
+# Hjemleveringordre V2.7.1
 
-Dette er en komplett pakke med alt fra V2.5.
+Komplett pakke med alt fra V2.6.
 
-## Korte PLU-numre
+Nytt:
+- valg av transporttype ved ferdigstilling
+- Standard kranbil til bakkeplan
+- Kranbil stor
+- Varebil
+- transporttype vises som egen linje i transportørmailen
+- stor og tydelig melding om at mailen ikke kan besvares
+- alle henvendelser henvises til obsbygg.tonsberg@coop.no
 
-Korte varenummer behandles som PLU og søkes aldri opp på Obsbygg.no.
-
-Følgende kjente åpne PLU-er normaliseres:
-
-- `20032` → `BYGGEVARER`
-- `29034` → `FRAKT`
-- `90646` → `VINDUER`
-
-## «ÅPEN PLU»-prefiks
-
-Prefikset fjernes automatisk fra vareteksten:
-
-- `ÅPEN PLU BYGGEVARER` → `BYGGEVARER`
-- `ÅPEN PLU FRAKT` → `FRAKT`
-- `ÅPEN PLU VINDUER` → `VINDUER`
-
-Dersom kundeordre-PDF-en allerede bare viser `BYGGEVARER` eller `VINDUER`,
-beholdes teksten uendret.
-
-## Kommentarlinjer
-
-Fritekst mellom PLU-linjen og neste varelinje beholdes som linjekommentar.
-
-Fra testordren:
-
-- `20032 BYGGEVARER`
-  - `500 m med 19x173 df 60 Bas`
-  - `Må bestilles evt`
-- `90646 VINDUER`
-  - `Tilbud #11465313`
-
-Kommentarene følger varen i plukklisten, e-postene og historikken.
-
-## Opplasting
-
-Last opp hele det utpakkede innholdet til roten av GitHub-repositoryet.
-Behold Vercel-prosjekt, miljøvariabler, Blob Store, Firebase og Resend.
+TypeScript-feilen `Property 'transportType' does not exist on type 'Order'`
+er rettet med en eksplisitt WaypointOrder-type.

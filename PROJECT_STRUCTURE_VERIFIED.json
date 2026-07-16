@@ -1,12 +1,5 @@
 {
-  "project": "Hjemleveringordre",
-  "version": "2.6.0",
-  "completeSrcFolder": true,
-  "includesAllFrom": "2.5.0",
-  "features": [
-    "known open PLU mapping",
-    "strip \u00c5PEN PLU prefix",
-    "preserve PLU number and comments",
-    "skip product lookup for PLU identifiers"
-  ]
+  "version": "2.7.1",
+  "includesAllFrom": "2.6.0",
+  "buildFix": "Explicit WaypointOrder type includes transportType"
 }

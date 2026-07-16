@@ -15,6 +15,24 @@ type BlobReference = {
   contentType?: string;
 };
 
+
+type WaypointOrder = {
+  title?: string | null;
+  source?: string | null;
+  pickupRecipientEmail?: string | null;
+  originalDocumentBlob?: BlobReference | null;
+  photos?: BlobReference[];
+  placement?: string | null;
+  locationCode?: string | null;
+  pickupDate?: string | null;
+  transportType?: "STANDARD_CRANE_GROUND" | "LARGE_CRANE" | "VAN" | null;
+  customerName?: string | null;
+  deliveryAddress?: string | null;
+  phone?: string | null;
+  comment?: string | null;
+  items?: unknown[];
+};
+
 const resend = new Resend(process.env.RESEND_API_KEY);
 const fromAddress =
   process.env.NOTIFICATION_FROM_EMAIL ||
@@ -45,7 +63,7 @@ export async function POST(
       return NextResponse.json({ error: "Ordren finnes ikke." }, { status: 404 });
     }
 
-    const order = snapshot.data()!;
+    const order = snapshot.data()! as WaypointOrder;
     if (order.source === "CLICK_AND_COLLECT") {
       return NextResponse.json(
         { error: "Klikk & Hent-ordre skal ikke sendes til Waypoint." },
@@ -131,15 +149,26 @@ export async function POST(
       order.locationCode ? ` – ${order.locationCode}` : ""
     }`;
 
+    const transportTypeLabel =
+      order.transportType === "LARGE_CRANE"
+        ? "Kranbil stor"
+        : order.transportType === "VAN"
+          ? "Varebil"
+          : "Standard kranbil til bakkeplan";
+
     const html = `
       <div style="font-family:Arial,sans-serif;color:#071a3a;max-width:720px;line-height:1.45;">
+        <div style="margin-bottom:20px;padding:18px;border:3px solid #c62828;background:#fff3f3;text-align:center;color:#9b1c1c;">
+          <div style="font-size:24px;font-weight:900;line-height:1.2;">DENNE E-POSTEN KAN IKKE BESVARES</div>
+          <div style="margin-top:10px;font-size:18px;font-weight:800;">Alle henvendelser vedrørende denne e-posten må sendes til <a href="mailto:obsbygg.tonsberg@coop.no" style="color:#002b67;text-decoration:underline;">obsbygg.tonsberg@coop.no</a></div>
+        </div>
         <h2 style="color:#002b67;margin-bottom:8px;">${escapeHtml(
           order.title ?? "Ferdig plukket ordre"
         )}</h2>
         <p>Hei,</p>
         <p>Følgende ordre er ferdig plukket og klar for avtalt utkjøring/henting.</p>
         <table role="presentation" style="border-collapse:collapse;width:100%;margin:16px 0;">
-          <tr><td style="padding:6px 0;color:#64748b;">Dato</td><td style="padding:6px 0;"><strong>${escapeHtml(order.pickupDate ?? "Ikke satt")}</strong></td></tr>
+          <tr><td style="padding:6px 0;color:#64748b;">Dato</td><td style="padding:6px 0;"><strong>${escapeHtml(order.pickupDate ?? "Ikke satt")}</strong></td></tr><tr><td style="padding:6px 0;color:#64748b;">Transporttype</td><td style="padding:6px 0;"><strong>${escapeHtml(transportTypeLabel)}</strong></td></tr>
           <tr><td style="padding:6px 0;color:#64748b;">Plassering</td><td style="padding:6px 0;"><strong>${escapeHtml(placement)}</strong></td></tr>
           <tr><td style="padding:6px 0;color:#64748b;">Kunde</td><td style="padding:6px 0;">${escapeHtml(order.customerName ?? "")}</td></tr>
           <tr><td style="padding:6px 0;color:#64748b;">Adresse</td><td style="padding:6px 0;">${escapeHtml(order.deliveryAddress ?? "")}</td></tr>

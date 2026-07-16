@@ -66,6 +66,7 @@ type Order = {
   placement?: string | null;
   locationCode?: string | null;
   fulfillmentMethod?: "THIS_THURSDAY" | "NEXT_THURSDAY" | "OWN_VEHICLE" | null;
+  transportType?: "STANDARD_CRANE_GROUND" | "LARGE_CRANE" | "VAN" | null;
   pickupDate?: string | null;
   pickupRecipientEmail?: string | null;
   pickupShareToken?: string | null;
@@ -145,6 +146,7 @@ export default function OrderPage({
   const [fulfillmentMethod, setFulfillmentMethod] = useState<"THIS_THURSDAY" | "NEXT_THURSDAY" | "OWN_VEHICLE">("THIS_THURSDAY");
   const [pickupDate, setPickupDate] = useState("");
   const [pickupRecipientEmail, setPickupRecipientEmail] = useState("");
+  const [transportType, setTransportType] = useState<"STANDARD_CRANE_GROUND" | "LARGE_CRANE" | "VAN">("STANDARD_CRANE_GROUND");
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -172,6 +174,7 @@ export default function OrderPage({
     setFulfillmentMethod(nextOrder.fulfillmentMethod ?? "THIS_THURSDAY");
     setPickupDate(nextOrder.pickupDate ?? "");
     setPickupRecipientEmail(nextOrder.pickupRecipientEmail ?? window.localStorage.getItem("waypointEmail") ?? "marcus@waypointlarvik.no");
+    setTransportType(nextOrder.transportType ?? "STANDARD_CRANE_GROUND");
   }, []);
 
   const load = useCallback(async () => {
@@ -1139,7 +1142,7 @@ export default function OrderPage({
             ))}
           </div>
         </section>
-        {showFulfillment && <div className="modal-backdrop"><div className="fulfillment-modal"><div className="modal-heading"><div><p className="eyebrow">SISTE STEG</p><h2>Velg utkjøring eller henting</h2></div><button type="button" onClick={()=>setShowFulfillment(false)}><X size={20}/></button></div><div className="fulfillment-options"><button type="button" className={fulfillmentMethod==="THIS_THURSDAY"?"selected":""} onClick={()=>{setFulfillmentMethod("THIS_THURSDAY");setPickupDate(thursday(0))}}><Truck size={20}/><strong>Torsdag inneværende uke</strong><span>{thursday(0)}</span></button><button type="button" className={fulfillmentMethod==="NEXT_THURSDAY"?"selected":""} onClick={()=>{setFulfillmentMethod("NEXT_THURSDAY");setPickupDate(thursday(1))}}><Truck size={20}/><strong>Torsdag neste uke</strong><span>{thursday(1)}</span></button><button type="button" className={fulfillmentMethod==="OWN_VEHICLE"?"selected":""} onClick={()=>setFulfillmentMethod("OWN_VEHICLE")}><Box size={20}/><strong>Egen bil</strong><span>Velg egen dato</span></button></div><label>Dato<input type="date" value={pickupDate} onChange={e=>setPickupDate(e.target.value)}/></label>{order.source!=="CLICK_AND_COLLECT"&&<label>E-post til Waypoint / transport<input type="email" value={pickupRecipientEmail} onChange={e=>setPickupRecipientEmail(e.target.value)}/></label>}<div className="modal-actions"><button className="outline-action" type="button" onClick={()=>setShowFulfillment(false)}>Tilbake</button><button className="green-action" type="button" disabled={saving||!pickupDate||(order.source!=="CLICK_AND_COLLECT"&&fulfillmentMethod!=="OWN_VEHICLE"&&!pickupRecipientEmail.trim())} onClick={()=>void savePicking(true)}><CheckCircle2 size={18}/>Ferdigstill ordre</button></div></div></div>}
+        {showFulfillment && <div className="modal-backdrop"><div className="fulfillment-modal"><div className="modal-heading"><div><p className="eyebrow">SISTE STEG</p><h2>Velg utkjøring eller henting</h2></div><button type="button" onClick={()=>setShowFulfillment(false)}><X size={20}/></button></div><div className="fulfillment-options"><button type="button" className={fulfillmentMethod==="THIS_THURSDAY"?"selected":""} onClick={()=>{setFulfillmentMethod("THIS_THURSDAY");setPickupDate(thursday(0))}}><Truck size={20}/><strong>Torsdag inneværende uke</strong><span>{thursday(0)}</span></button><button type="button" className={fulfillmentMethod==="NEXT_THURSDAY"?"selected":""} onClick={()=>{setFulfillmentMethod("NEXT_THURSDAY");setPickupDate(thursday(1))}}><Truck size={20}/><strong>Torsdag neste uke</strong><span>{thursday(1)}</span></button><button type="button" className={fulfillmentMethod==="OWN_VEHICLE"?"selected":""} onClick={()=>setFulfillmentMethod("OWN_VEHICLE")}><Box size={20}/><strong>Egen bil</strong><span>Velg egen dato</span></button></div><label>Dato<input type="date" value={pickupDate} onChange={e=>setPickupDate(e.target.value)}/></label><label>Type transport<select value={transportType} onChange={e=>setTransportType(e.target.value as "STANDARD_CRANE_GROUND"|"LARGE_CRANE"|"VAN")}><option value="STANDARD_CRANE_GROUND">Standard kranbil til bakkeplan</option><option value="LARGE_CRANE">Kranbil stor</option><option value="VAN">Varebil</option></select></label>{order.source!=="CLICK_AND_COLLECT"&&<label>E-post til Waypoint / transport<input type="email" value={pickupRecipientEmail} onChange={e=>setPickupRecipientEmail(e.target.value)}/></label>}<div className="modal-actions"><button className="outline-action" type="button" onClick={()=>setShowFulfillment(false)}>Tilbake</button><button className="green-action" type="button" disabled={saving||!pickupDate||(order.source!=="CLICK_AND_COLLECT"&&fulfillmentMethod!=="OWN_VEHICLE"&&!pickupRecipientEmail.trim())} onClick={()=>void savePicking(true)}><CheckCircle2 size={18}/>Ferdigstill ordre</button></div></div></div>}
       </section>
     </main>
   );
