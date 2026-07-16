@@ -1,4 +1,0 @@
-import { NextRequest, NextResponse } from "next/server";
-import { adminDb } from "@/lib/firebase/admin";
-export const runtime="nodejs"; export const dynamic="force-dynamic";
-export async function GET(req:NextRequest,ctx:{params:Promise<{id:string}>}){const {id}=await ctx.params;const token=req.nextUrl.searchParams.get("token");const snap=await adminDb.collection("orders").doc(id).get();const d=snap.data();if(!snap.exists||!token||d?.pickupShareToken!==token)return NextResponse.json({error:"Ingen tilgang."},{status:403});const photos=Array.isArray(d.photos)?d.photos:[];return NextResponse.json({order:{id,...d,originalDocumentUrl:d.originalDocumentBlob?.pathname?`/api/pickup/${id}/file?token=${encodeURIComponent(token)}&kind=original`:null,photos:photos.map((_:unknown,index:number)=>({index,url:`/api/pickup/${id}/file?token=${encodeURIComponent(token)}&kind=photo&index=${index}`}))}})}
