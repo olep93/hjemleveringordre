@@ -1,5 +1,5 @@
 {
-  "version": "2.7.1",
-  "includesAllFrom": "2.6.0",
-  "buildFix": "Explicit WaypointOrder type includes transportType"
+  "version": "2.8.1",
+  "includesAllFrom": "2.8.0",
+  "buildFix": "photo delete route now imports and calls deletePrivateBlobs"
 }

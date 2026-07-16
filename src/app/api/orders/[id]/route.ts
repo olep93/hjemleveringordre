@@ -195,6 +195,7 @@ export async function PATCH(
       pickingSessionEnded?: boolean;
       fulfillmentMethod?: "THIS_THURSDAY" | "NEXT_THURSDAY" | "OWN_VEHICLE";
       transportType?: "STANDARD_CRANE_GROUND" | "LARGE_CRANE" | "VAN";
+      transportComment?: string | null;
       pickupDate?: string | null;
       pickupRecipientEmail?: string | null;
       locationCode?: string | null;
@@ -211,6 +212,7 @@ export async function PATCH(
         comment?: string | null;
         fulfillmentMethod?: "THIS_THURSDAY" | "NEXT_THURSDAY" | "OWN_VEHICLE" | null;
         transportType?: "STANDARD_CRANE_GROUND" | "LARGE_CRANE" | "VAN" | null;
+        transportComment?: string | null;
         pickupDate?: string | null;
         pickupRecipientEmail?: string | null;
         items?: OrderItem[];
@@ -252,6 +254,7 @@ export async function PATCH(
           lastPickingSavedBy: null,
           fulfillmentMethod: null,
           transportType: null,
+          transportComment: null,
           pickupDate: null,
           pickupShareToken: null,
           updatedAt: FieldValue.serverTimestamp()
@@ -313,6 +316,7 @@ export async function PATCH(
         comment: edit.comment || null,
         fulfillmentMethod: edit.fulfillmentMethod ?? null,
         transportType: edit.transportType ?? null,
+        transportComment: edit.transportComment?.trim() || null,
         pickupDate: edit.pickupDate || null,
         pickupRecipientEmail:
           edit.pickupRecipientEmail?.trim().toLowerCase() ||
@@ -393,6 +397,7 @@ export async function PATCH(
     if ("fulfillmentMethod" in body) update.fulfillmentMethod = body.fulfillmentMethod ?? null;
     if ("pickupDate" in body) update.pickupDate = body.pickupDate || null;
     if ("transportType" in body) update.transportType = body.transportType ?? null;
+    if ("transportComment" in body) update.transportComment = body.transportComment?.trim() || null;
     if ("pickupRecipientEmail" in body) update.pickupRecipientEmail = body.pickupRecipientEmail?.trim().toLowerCase() || null;
 
     if (body.status === "PICKING") {

@@ -1812,3 +1812,60 @@ html, body {
   color:var(--obs-muted);
   font-size:13px;
 }
+
+
+/* V2.8 transportadvarsler og kommentar */
+.transport-warning {
+  margin-top: 10px;
+  padding: 12px 14px;
+  border-left: 4px solid #d32f2f;
+  border-radius: 8px;
+  background: #fff0f0;
+  color: #a61f1f;
+  font-size: 13px;
+  font-weight: 850;
+  line-height: 1.45;
+}
+
+.transport-comment-box {
+  margin-top: 12px;
+  border: 1px solid #cfdceb;
+  border-radius: 11px;
+  background: #f8fbff;
+  overflow: hidden;
+}
+
+.transport-comment-box summary {
+  cursor: pointer;
+  padding: 13px 14px;
+  color: var(--obs-blue);
+  font-weight: 850;
+  list-style: none;
+}
+
+.transport-comment-box summary::-webkit-details-marker {
+  display: none;
+}
+
+.transport-comment-box[open] summary {
+  border-bottom: 1px solid #d9e3ee;
+  background: #eef5ff;
+}
+
+.transport-comment-box label {
+  display: grid;
+  gap: 7px;
+  padding: 14px;
+  color: #263f61;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.transport-comment-box textarea {
+  width: 100%;
+  min-height: 100px;
+  border: 1px solid #c9d7e7;
+  border-radius: 9px;
+  padding: 10px;
+  resize: vertical;
+}

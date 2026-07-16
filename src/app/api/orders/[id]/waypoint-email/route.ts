@@ -26,6 +26,7 @@ type WaypointOrder = {
   locationCode?: string | null;
   pickupDate?: string | null;
   transportType?: "STANDARD_CRANE_GROUND" | "LARGE_CRANE" | "VAN" | null;
+  transportComment?: string | null;
   customerName?: string | null;
   deliveryAddress?: string | null;
   phone?: string | null;
@@ -156,6 +157,13 @@ export async function POST(
           ? "Varebil"
           : "Standard kranbil til bakkeplan";
 
+    const transportWarning =
+      order.transportType === "LARGE_CRANE"
+        ? "NB: Dette påløper ekstrakostnad utenfor standard leveringsvilkår, kontakt Waypoint direkte for priser."
+        : order.transportType === "VAN"
+          ? "NB: Innbæring må eventuelt avtales direkte med Waypoint. Dette er kun levering med varebil."
+          : "NB: Standard levering leveres normalt kun til bakkeplan og løftes rett av bil. For andre avtaler må transportør kontaktes.";
+
     const html = `
       <div style="font-family:Arial,sans-serif;color:#071a3a;max-width:720px;line-height:1.45;">
         <div style="margin-bottom:20px;padding:18px;border:3px solid #c62828;background:#fff3f3;text-align:center;color:#9b1c1c;">
@@ -169,6 +177,15 @@ export async function POST(
         <p>Følgende ordre er ferdig plukket og klar for avtalt utkjøring/henting.</p>
         <table role="presentation" style="border-collapse:collapse;width:100%;margin:16px 0;">
           <tr><td style="padding:6px 0;color:#64748b;">Dato</td><td style="padding:6px 0;"><strong>${escapeHtml(order.pickupDate ?? "Ikke satt")}</strong></td></tr><tr><td style="padding:6px 0;color:#64748b;">Transporttype</td><td style="padding:6px 0;"><strong>${escapeHtml(transportTypeLabel)}</strong></td></tr>
+          <tr>
+            <td colspan="2" style="padding:10px 12px;background:#fff0f0;border-left:4px solid #c62828;color:#9b1c1c;font-weight:800;">
+              ${escapeHtml(transportWarning)}
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:6px 0;color:#64748b;">Kommentar til transportør</td>
+            <td style="padding:6px 0;"><strong>${escapeHtml(order.transportComment ?? "Ingen kommentar")}</strong></td>
+          </tr>
           <tr><td style="padding:6px 0;color:#64748b;">Plassering</td><td style="padding:6px 0;"><strong>${escapeHtml(placement)}</strong></td></tr>
           <tr><td style="padding:6px 0;color:#64748b;">Kunde</td><td style="padding:6px 0;">${escapeHtml(order.customerName ?? "")}</td></tr>
           <tr><td style="padding:6px 0;color:#64748b;">Adresse</td><td style="padding:6px 0;">${escapeHtml(order.deliveryAddress ?? "")}</td></tr>

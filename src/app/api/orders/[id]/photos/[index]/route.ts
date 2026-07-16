@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { requireRole } from "@/lib/auth";
-import { deletePrivateBlob } from "@/lib/blob-storage";
+import { deletePrivateBlobs } from "@/lib/blob-storage";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -41,7 +41,7 @@ export async function DELETE(
     }
 
     if (photo.pathname) {
-      await deletePrivateBlob(photo.pathname);
+      await deletePrivateBlobs([photo.pathname]);
     }
 
     const remaining = photos.filter((_, i) => i !== index);
