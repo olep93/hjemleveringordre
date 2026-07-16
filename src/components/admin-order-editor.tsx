@@ -36,7 +36,12 @@ type Order = {
   pickupDate?: string | null;
   pickupRecipientEmail?: string | null;
   items?: Item[];
-  photos?: Array<{ url?: string; filename?: string; uploadedBy?: string | null }>;
+  photos?: Array<{
+    url?: string | null;
+    filename?: string;
+    uploadedBy?: string | null;
+    createdAt?: string;
+  }>;
 };
 
 export function AdminOrderEditor({

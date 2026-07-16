@@ -1,19 +1,21 @@
-# Hjemleveringordre V2.8.4
+# Hjemleveringordre V2.8.5
 
-Komplett pakke med alt fra V2.8.3.
+Komplett pakke med alt fra V2.8.4.
 
-Build-feilen er rettet:
+Build-feilen skyldtes at ordretypen og administrator-editoren hadde to ulike
+definisjoner av `photos`.
 
-`NotificationItem` var deklarert lokalt i `src/lib/notifications.ts`, men ikke
-eksportert. Waypoint-ruten importerer nå en type som faktisk er eksportert.
+Den faktiske ordretypen tillater:
 
-Endringen er:
+- `url?: string | null`
+- `filename?: string`
+- `uploadedBy?: string`
+- `createdAt?: string`
 
-`type NotificationItem = ...`
+Administrator-editoren forventet derimot at `url` aldri kunne være `null`.
 
-til:
-
-`export type NotificationItem = ...`
+Photo-typen i administrator-editoren er nå synkronisert, slik at
+`<AdminOrderEditor order={order} />` bygger korrekt.
 
 Du trenger ikke tømme GitHub-repositoryet. Last opp hele pakken og erstatt filer
 med samme navn.

@@ -1,5 +1,5 @@
 {
-  "version": "2.8.4",
-  "includesAllFrom": "2.8.3",
-  "buildFix": "NotificationItem is exported from notifications.ts"
+  "version": "2.8.5",
+  "includesAllFrom": "2.8.4",
+  "buildFix": "AdminOrderEditor photo type accepts null URL and createdAt"
 }
