@@ -1,37 +1,41 @@
-# Hjemleveringordre V2.4 – testmodus i administrasjonspanelet
+# Hjemleveringordre V2.6 – åpne og generiske PLU-er
 
-Dette er en komplett pakke med alt fra V2.2 og V2.3.
+Dette er en komplett pakke med alt fra V2.5.
 
-## Test mode
+## Korte PLU-numre
 
-Administratorer kan nå styre e-postmodusen direkte fra
-administrasjonspanelet.
+Korte varenummer behandles som PLU og søkes aldri opp på Obsbygg.no.
 
-### Testmodus på
+Følgende kjente åpne PLU-er normaliseres:
 
-- ferdigstillingsmail sendes bare til jobb-e-posten til den innloggede brukeren
-- Waypoint/transportøren mottar ingenting
-- emnet merkes med `[TEST]`
-- original kundeordre og plukkebilder følger som vedlegg
+- `20032` → `BYGGEVARER`
+- `29034` → `FRAKT`
+- `90646` → `VINDUER`
 
-### Testmodus av
+## «ÅPEN PLU»-prefiks
 
-- ferdigstillingsmail sendes til Waypoint/transportøren
-- jobb-e-posten til innlogget bruker settes i kopifeltet
-- original kundeordre og plukkebilder følger som vedlegg
+Prefikset fjernes automatisk fra vareteksten:
 
-Standard transportøradresse er:
+- `ÅPEN PLU BYGGEVARER` → `BYGGEVARER`
+- `ÅPEN PLU FRAKT` → `FRAKT`
+- `ÅPEN PLU VINDUER` → `VINDUER`
 
-`marcus@waypointlarvik.no`
+Dersom kundeordre-PDF-en allerede bare viser `BYGGEVARER` eller `VINDUER`,
+beholdes teksten uendret.
 
-Adressen kan redigeres i samme panel.
+## Kommentarlinjer
 
-Innstillingen lagres i Firestore under:
+Fritekst mellom PLU-linjen og neste varelinje beholdes som linjekommentar.
 
-`appSettings/email`
+Fra testordren:
 
-Standardverdien er alltid testmodus på dersom innstillingen ikke finnes.
-Dette hindrer utilsiktet utsending til transportøren.
+- `20032 BYGGEVARER`
+  - `500 m med 19x173 df 60 Bas`
+  - `Må bestilles evt`
+- `90646 VINDUER`
+  - `Tilbud #11465313`
+
+Kommentarene følger varen i plukklisten, e-postene og historikken.
 
 ## Opplasting
 

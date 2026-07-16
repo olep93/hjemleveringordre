@@ -1,16 +1,12 @@
 {
   "project": "Hjemleveringordre",
-  "version": "2.4.0",
+  "version": "2.6.0",
   "completeSrcFolder": true,
-  "includesAllFrom": [
-    "2.2.0",
-    "2.3.0"
-  ],
+  "includesAllFrom": "2.5.0",
   "features": [
-    "admin-controlled Waypoint test mode",
-    "Firestore-persisted email settings",
-    "editable Waypoint recipient",
-    "safe default test mode",
-    "production mode sends to Waypoint and CCs logged-in user"
+    "known open PLU mapping",
+    "strip \u00c5PEN PLU prefix",
+    "preserve PLU number and comments",
+    "skip product lookup for PLU identifiers"
   ]
 }
