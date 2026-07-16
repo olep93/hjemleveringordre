@@ -7,7 +7,7 @@ export type NotificationEvent =
   | "LOADED"
   | "DELIVERED";
 
-type NotificationItem = {
+export type NotificationItem = {
   productName?: string | null;
   description?: string | null;
   quantity?: number | string | null;

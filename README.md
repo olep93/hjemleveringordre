@@ -1,13 +1,19 @@
-# Hjemleveringordre V2.8.3
+# Hjemleveringordre V2.8.4
 
-Komplett pakke med alt fra V2.8.2.
+Komplett pakke med alt fra V2.8.3.
 
-Denne versjonen retter TypeScript-feilen i Waypoint-mailruten:
+Build-feilen er rettet:
 
-`unknown[] | undefined` kunne ikke sendes til `formatOrderItemsHtml`.
+`NotificationItem` var deklarert lokalt i `src/lib/notifications.ts`, men ikke
+eksportert. Waypoint-ruten importerer nå en type som faktisk er eksportert.
 
-Ruten bruker nå den samme `NotificationItem`-typen som e-postformateringen,
-og sender en tom liste dersom eldre ordre mangler varelinjer.
+Endringen er:
 
-Du trenger ikke tømme GitHub-repositoryet. Last opp hele innholdet fra denne
-pakken og velg å erstatte filer med samme navn.
+`type NotificationItem = ...`
+
+til:
+
+`export type NotificationItem = ...`
+
+Du trenger ikke tømme GitHub-repositoryet. Last opp hele pakken og erstatt filer
+med samme navn.
