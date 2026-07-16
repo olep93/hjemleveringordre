@@ -37,7 +37,7 @@ type PositionedText = {
   y: number;
 };
 
-const PARSER_VERSION = "obsbygg-mupdf-v9-generic-plu-comments";
+const PARSER_VERSION = "obsbygg-mupdf-v10-safe-table-boundary";
 
 function clean(value?: string | null): string {
   return String(value ?? "")
@@ -476,7 +476,12 @@ function parseRows(rows: string[]): ParsedOrderItem[] {
     (row) => /EAN\/PLU/i.test(row) && /Varetekst/i.test(row)
   );
 
-  const candidates = tableStart >= 0 ? rows.slice(tableStart + 1) : rows;
+  // Do not scan the complete document as item rows when the table header
+  // was not found. Doing so can turn customer numbers, names and addresses
+  // into false generic PLU rows.
+  if (tableStart < 0) return [];
+
+  const candidates = rows.slice(tableStart + 1);
   const items: ParsedOrderItem[] = [];
   let index = 0;
 

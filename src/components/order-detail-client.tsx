@@ -17,6 +17,7 @@ import {
   Info,
   Lock,
   Mail,
+  Send,
   MapPin,
   PackageCheck,
   Play,
@@ -331,7 +332,106 @@ export default function OrderPage({
   function inputDate(date: Date) { return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`; }
   function thursday(weeks:number){const t=new Date();const monday=(t.getDay()+6)%7;const d=new Date(t);d.setDate(t.getDate()-monday+3+weeks*7);return inputDate(d)}
   function beginFinalize(){if(!validateBeforeFinalize())return;setPickupDate(fulfillmentMethod==="NEXT_THURSDAY"?thursday(1):fulfillmentMethod==="THIS_THURSDAY"?thursday(0):pickupDate);setShowFulfillment(true)}
-  function openOutlookTemplate(current:Order){if(current.source==="CLICK_AND_COLLECT")return;const to=current.pickupRecipientEmail||pickupRecipientEmail.trim();if(!to){showValidationFeedback("Skriv inn e-postadressen til Waypoint.",{});return}window.localStorage.setItem("waypointEmail",to);const share=current.pickupShareToken?`${window.location.origin}/pickup/${current.id}?token=${encodeURIComponent(current.pickupShareToken)}`:`${window.location.origin}/orders/${current.id}`;const lines=(current.items??[]).filter(x=>!x.isFreight).map(x=>`- ${x.productName??x.description}: ${x.quantity} ${x.unit??""}`).join("\n");const body=["Hei,","",`Følgende ordre er ferdig plukket:`,current.title,"",`Dato: ${current.pickupDate??""}`,`Plassering: ${current.placement??""}${current.locationCode?` – ${current.locationCode}`:""}`,`Kunde: ${current.customerName??""}`,`Adresse: ${current.deliveryAddress??""}`,`Telefon: ${current.phone??""}`,"","Kommentar fra plukking:",current.comment??"Ingen kommentar","","Varelinjer:",lines,"","Original kundeordre og bilder:",share,"","Med vennlig hilsen","Obs BYGG Tønsberg"].join("\n");const u=new URL("https://outlook.office.com/mail/deeplink/compose");u.searchParams.set("to",to);u.searchParams.set("subject",`${current.title} – ${current.pickupDate??""}`);u.searchParams.set("body",body);window.open(u.toString(),"_blank","noopener,noreferrer")}
+  function openOutlookTemplate(current: Order) {
+    if (current.source === "CLICK_AND_COLLECT") return;
+    const to = current.pickupRecipientEmail || pickupRecipientEmail.trim();
+    if (!to) {
+      showValidationFeedback("Skriv inn e-postadressen til Waypoint.", {});
+      return;
+    }
+
+    window.localStorage.setItem("waypointEmail", to);
+    const share = current.pickupShareToken
+      ? `${window.location.origin}/pickup/${current.id}?token=${encodeURIComponent(
+          current.pickupShareToken
+        )}`
+      : `${window.location.origin}/orders/${current.id}`;
+    const lines = (current.items ?? [])
+      .filter((item) => !item.isFreight)
+      .map(
+        (item) =>
+          `- ${item.productName ?? item.description}: ${item.quantity} ${
+            item.unit ?? ""
+          }`
+      )
+      .join("\n");
+    const subject = `${current.title} – ${current.pickupDate ?? ""}`;
+    const body = [
+      "Hei,",
+      "",
+      "Følgende ordre er ferdig plukket:",
+      current.title,
+      "",
+      `Dato: ${current.pickupDate ?? ""}`,
+      `Plassering: ${current.placement ?? ""}${
+        current.locationCode ? ` – ${current.locationCode}` : ""
+      }`,
+      `Kunde: ${current.customerName ?? ""}`,
+      `Adresse: ${current.deliveryAddress ?? ""}`,
+      `Telefon: ${current.phone ?? ""}`,
+      "",
+      "Kommentar fra plukking:",
+      current.comment ?? "Ingen kommentar",
+      "",
+      "Varelinjer:",
+      lines,
+      "",
+      "Original kundeordre og bilder:",
+      share,
+      "",
+      "Med vennlig hilsen",
+      "Obs BYGG Tønsberg"
+    ].join("\n");
+
+    // URLSearchParams serialiserer mellomrom som +. Outlook viser enkelte
+    // ganger plusstegnene bokstavelig. encodeURIComponent bruker %20.
+    const url =
+      "https://outlook.office.com/mail/deeplink/compose" +
+      `?to=${encodeURIComponent(to)}` +
+      `&subject=${encodeURIComponent(subject)}` +
+      `&body=${encodeURIComponent(body)}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+
+  async function sendWaypointEmail(current: Order) {
+    if (current.source === "CLICK_AND_COLLECT") return;
+    const to = current.pickupRecipientEmail || pickupRecipientEmail.trim();
+    if (!to) {
+      showValidationFeedback("Skriv inn e-postadressen til Waypoint.", {});
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+    setInfo("Sender e-post med original kundeordre og plukkebilder …");
+
+    try {
+      const response = await fetch(`/api/orders/${current.id}/waypoint-email`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ to })
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error ?? "E-posten kunne ikke sendes.");
+      }
+      setInfo(
+        result.testMode
+          ? `Testmail sendt til din innloggede jobbepost (${result.to}) med ${result.attachmentCount} vedlegg. Waypoint mottok ikke denne testen.`
+          : `E-post sendt til ${result.to}, med kopi til ${result.cc}, og ${result.attachmentCount} vedlegg.`
+      );
+      await load();
+    } catch (sendError) {
+      setInfo(null);
+      setError(
+        sendError instanceof Error
+          ? sendError.message
+          : "E-posten kunne ikke sendes."
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
 
   async function savePicking(finalize: boolean) {
     if (!order || !actorName) return;
@@ -990,7 +1090,37 @@ export default function OrderPage({
         </div>
 
         {(order.photos ?? []).length > 0 && <section className="modern-card history-card-spacing"><div className="modern-card-title"><span className="title-icon"><Camera size={21}/></span><h2>Bilder av ferdig plukket ordre</h2></div><div className="photo-grid persisted-picking-photos">{(order.photos??[]).map((photo,index)=>photo.url?<figure key={index}><a href={photo.url} target="_blank"><img src={photo.url} alt="Plukkebilde"/></a><figcaption>{photo.uploadedBy??"Ukjent"}</figcaption></figure>:null)}</div></section>}
-        {!pickingMode && order.status === "READY_FOR_LOADING" && order.source !== "CLICK_AND_COLLECT" && <section className="modern-card history-card-spacing outlook-handoff-card"><div><p className="eyebrow">WAYPOINT / TRANSPORT</p><h2>Åpne ferdig hentemal i Outlook</h2><p>Malen inneholder plukkekommentar, varelinjer, dato, plassering og lenke til dokumenter og bilder.</p></div><button className="blue-action" onClick={()=>openOutlookTemplate(order)}><Mail size={18}/>Åpne i Outlook på web</button></section>}
+        {!pickingMode &&
+          order.status === "READY_FOR_LOADING" &&
+          order.source !== "CLICK_AND_COLLECT" && (
+            <section className="modern-card history-card-spacing outlook-handoff-card">
+              <div>
+                <p className="eyebrow">WAYPOINT / TRANSPORT</p>
+                <h2>Send ordren til Waypoint</h2>
+                <p>
+                  Direkte sending inkluderer original kundeordre og alle
+                  bilder som faktiske vedlegg. I testmodus sendes meldingen
+                  bare til jobbeposten til den innloggede brukeren.
+                </p>
+              </div>
+              <div className="waypoint-mail-actions">
+                <button
+                  className="green-action"
+                  disabled={saving}
+                  onClick={() => void sendWaypointEmail(order)}
+                >
+                  <Send size={18} /> Send testmail med vedlegg
+                </button>
+                <button
+                  className="outline-action"
+                  disabled={saving}
+                  onClick={() => openOutlookTemplate(order)}
+                >
+                  <Mail size={18} /> Åpne mal i Outlook
+                </button>
+              </div>
+            </section>
+          )}
 
         <section className="modern-card history-card-spacing">
           <div className="modern-card-title">

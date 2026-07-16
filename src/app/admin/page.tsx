@@ -10,6 +10,9 @@ import {
   Save,
   Send,
   Shield,
+  TestTube2,
+  ToggleLeft,
+  ToggleRight,
   UserPlus,
   Users,
   X
@@ -38,6 +41,11 @@ type Recipient = {
   events: NotificationEvent[];
 };
 
+type EmailSettings = {
+  waypointTestMode: boolean;
+  waypointEmail: string;
+};
+
 const eventLabels: Record<NotificationEvent, string> = {
   NEW_ORDER: "Ny ordre",
   READY_FOR_LOADING: "Klar for lasting",
@@ -50,14 +58,20 @@ const allEvents = Object.keys(eventLabels) as NotificationEvent[];
 export default function AdminPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [recipients, setRecipients] = useState<Recipient[]>([]);
+  const [emailSettings, setEmailSettings] = useState<EmailSettings>({
+    waypointTestMode: true,
+    waypointEmail: "marcus@waypointlarvik.no"
+  });
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
-    const [usersResponse, recipientsResponse] = await Promise.all([
-      fetch("/api/admin/users", { cache: "no-store" }),
-      fetch("/api/admin/notifications", { cache: "no-store" })
-    ]);
+    const [usersResponse, recipientsResponse, settingsResponse] =
+      await Promise.all([
+        fetch("/api/admin/users", { cache: "no-store" }),
+        fetch("/api/admin/notifications", { cache: "no-store" }),
+        fetch("/api/admin/settings", { cache: "no-store" })
+      ]);
 
     if (usersResponse.status === 401 || usersResponse.status === 403) {
       window.location.href = "/";
@@ -66,8 +80,15 @@ export default function AdminPage() {
 
     const usersResult = await usersResponse.json();
     const recipientsResult = await recipientsResponse.json();
+    const settingsResult = await settingsResponse.json();
     setUsers(usersResult.users ?? []);
     setRecipients(recipientsResult.recipients ?? []);
+    setEmailSettings(
+      settingsResult.settings ?? {
+        waypointTestMode: true,
+        waypointEmail: "marcus@waypointlarvik.no"
+      }
+    );
   }, []);
 
   useEffect(() => {
@@ -191,6 +212,32 @@ export default function AdminPage() {
     }
   }
 
+  async function updateEmailSettings(patch: Partial<EmailSettings>) {
+    setBusy(true);
+    try {
+      const response = await fetch("/api/admin/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch)
+      });
+      const result = await response.json();
+
+      if (!response.ok) {
+        setMessage(result.error ?? "Kunne ikke lagre e-postinnstillingen.");
+        return;
+      }
+
+      setEmailSettings(result.settings);
+      setMessage(
+        result.settings.waypointTestMode
+          ? "Testmodus er aktivert. Transportøren mottar ingen e-post."
+          : "Testmodus er slått av. E-post sendes nå til transportøren med kopi til innlogget bruker."
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <main>
       <div className="admin-top">
@@ -205,6 +252,80 @@ export default function AdminPage() {
 
       <section className="modern-order-page admin-page-modern">
         {message && <div className="info-message">{message}</div>}
+
+        <section className={`modern-card email-mode-card ${
+          emailSettings.waypointTestMode ? "test-active" : "live-active"
+        }`}>
+          <div className="email-mode-heading">
+            <span className="title-icon">
+              <TestTube2 size={21} />
+            </span>
+            <div>
+              <h2>Test mode</h2>
+              <p>
+                Når testmodus er på, sendes ferdigstillingsmailen kun til
+                jobb-e-posten til den innloggede brukeren. Transportøren
+                mottar ingenting. Når testmodus er av, sendes mailen til
+                Waypoint med innlogget bruker i kopifeltet.
+              </p>
+            </div>
+          </div>
+
+          <div className="email-mode-controls">
+            <label>
+              Waypoint / transportør
+              <input
+                type="email"
+                value={emailSettings.waypointEmail}
+                disabled={busy}
+                onChange={(event) =>
+                  setEmailSettings((current) => ({
+                    ...current,
+                    waypointEmail: event.target.value
+                  }))
+                }
+                onBlur={() =>
+                  void updateEmailSettings({
+                    waypointEmail: emailSettings.waypointEmail
+                  })
+                }
+              />
+            </label>
+
+            <button
+              type="button"
+              className={
+                emailSettings.waypointTestMode
+                  ? "test-mode-toggle enabled"
+                  : "test-mode-toggle disabled"
+              }
+              disabled={busy}
+              onClick={() =>
+                void updateEmailSettings({
+                  waypointTestMode: !emailSettings.waypointTestMode
+                })
+              }
+            >
+              {emailSettings.waypointTestMode ? (
+                <ToggleRight size={34} />
+              ) : (
+                <ToggleLeft size={34} />
+              )}
+              <span>
+                <strong>
+                  {emailSettings.waypointTestMode
+                    ? "Testmodus er på"
+                    : "Testmodus er av"}
+                </strong>
+                <small>
+                  {emailSettings.waypointTestMode
+                    ? "Kun innlogget bruker mottar mailen"
+                    : "Transportøren mottar mailen"}
+                </small>
+              </span>
+            </button>
+          </div>
+        </section>
 
         <div className="admin-modern-grid">
           <section className="modern-card">

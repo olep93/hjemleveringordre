@@ -407,6 +407,8 @@ export async function PATCH(
       update.pickedBy = actorName;
       update.pickedAt = FieldValue.serverTimestamp();
       update.pickingSessionOpen = false;
+      update.pickupShareToken =
+        current.pickupShareToken || randomBytes(24).toString("hex");
     }
 
     await ref.update(update);

@@ -1644,3 +1644,119 @@ html, body {
 .admin-editor-actions { display:flex; justify-content:flex-end; flex-wrap:wrap; gap:9px; margin-top:17px; padding-top:15px; border-top:1px solid var(--obs-line); }
 @media(max-width:1000px){.admin-edit-grid{grid-template-columns:1fr 1fr}.admin-item-grid{grid-template-columns:1fr 1fr 1fr}.admin-item-grid .wide{grid-column:span 2}}
 @media(max-width:700px){.admin-edit-grid,.admin-item-grid{grid-template-columns:1fr}.admin-edit-grid .full,.admin-item-grid .wide{grid-column:1}.admin-order-tools>button,.admin-editor-actions>button{width:100%}}
+
+/* V2.2 Waypoint email actions */
+.waypoint-mail-actions { display:flex; flex-wrap:wrap; gap:10px; justify-content:flex-end; }
+@media (max-width:760px){ .waypoint-mail-actions{width:100%;display:grid;} .waypoint-mail-actions button{width:100%;} }
+
+
+/* V2.4 administrerbar testmodus */
+.email-mode-card {
+  margin-bottom: 18px;
+  border-width: 2px;
+  transition: border-color .2s ease, background .2s ease;
+}
+
+.email-mode-card.test-active {
+  border-color: #e6a700;
+  background: linear-gradient(110deg, #ffffff, #fff9e8);
+}
+
+.email-mode-card.live-active {
+  border-color: #1d9b58;
+  background: linear-gradient(110deg, #ffffff, #edf9f2);
+}
+
+.email-mode-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 13px;
+}
+
+.email-mode-heading h2 {
+  color: var(--obs-ink);
+  font-size: 22px;
+}
+
+.email-mode-heading p {
+  max-width: 850px;
+  margin-top: 5px;
+  color: var(--obs-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.email-mode-controls {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) minmax(280px, auto);
+  align-items: end;
+  gap: 14px;
+  margin-top: 17px;
+}
+
+.email-mode-controls > label {
+  display: grid;
+  gap: 7px;
+  color: #263f61;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.email-mode-controls input {
+  min-height: 50px;
+  border: 1px solid #c9d7e7;
+  border-radius: 10px;
+  padding: 0 13px;
+  background: white;
+  color: var(--obs-ink);
+  font-weight: 700;
+}
+
+.test-mode-toggle {
+  min-height: 66px;
+  padding: 10px 15px;
+  border-radius: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 11px;
+  text-align: left;
+  font-weight: 800;
+}
+
+.test-mode-toggle.enabled {
+  border: 1px solid #e6a700;
+  background: #fff5cf;
+  color: #755300;
+}
+
+.test-mode-toggle.disabled {
+  border: 1px solid #2ca56a;
+  background: #eaf8f0;
+  color: #11663c;
+}
+
+.test-mode-toggle span {
+  display: grid;
+  gap: 3px;
+}
+
+.test-mode-toggle strong {
+  font-size: 14px;
+}
+
+.test-mode-toggle small {
+  font-size: 11px;
+  font-weight: 700;
+  opacity: .82;
+}
+
+@media (max-width: 760px) {
+  .email-mode-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .test-mode-toggle {
+    width: 100%;
+  }
+}
