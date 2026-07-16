@@ -1,23 +1,5 @@
 {
-  "project": "Hjemleveringordre",
-  "version": "3.0.0",
-  "cleanRepositoryPackage": true,
+  "version": "2.8.4",
   "includesAllFrom": "2.8.3",
-  "sharedTypes": [
-    "Order",
-    "OrderItem",
-    "OrderPhoto",
-    "BlobReference",
-    "OrderEvent",
-    "OrderStatus",
-    "FulfillmentMethod",
-    "TransportType",
-    "DashboardOrder"
-  ],
-  "fixes": [
-    "AdminOrderEditor and OrderDetailClient use the same Order type",
-    "Nullable photo URL compatibility",
-    "NotificationItem is exported",
-    "Dashboard summary uses shared types"
-  ]
+  "buildFix": "NotificationItem is exported from notifications.ts"
 }
