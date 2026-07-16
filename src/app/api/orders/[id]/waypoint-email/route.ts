@@ -3,7 +3,7 @@ import { Resend } from "resend";
 import { adminDb } from "@/lib/firebase/admin";
 import { requireRole } from "@/lib/auth";
 import { readPrivateBlobBuffer } from "@/lib/blob-storage";
-import { formatOrderItemsHtml } from "@/lib/notifications";
+import { formatOrderItemsHtml, type NotificationItem } from "@/lib/notifications";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -31,7 +31,7 @@ type WaypointOrder = {
   deliveryAddress?: string | null;
   phone?: string | null;
   comment?: string | null;
-  items?: unknown[];
+  items?: NotificationItem[];
 };
 
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -196,7 +196,7 @@ export async function POST(
           order.comment ?? "Ingen kommentar"
         )}</div>
         <h3 style="margin-top:20px;margin-bottom:6px;">Varelinjer</h3>
-        ${formatOrderItemsHtml(order.items)}
+        ${formatOrderItemsHtml(order.items ?? [])}
         <p style="margin-top:18px;">Original kundeordre og bilder av ferdig plukket ordre ligger vedlagt.</p>
         <p>Med vennlig hilsen<br/><strong>Obs BYGG Tønsberg</strong></p>
       </div>
