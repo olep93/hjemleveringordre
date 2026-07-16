@@ -1,30 +1,19 @@
-# Hjemleveringordre V2.8.1
+# Hjemleveringordre V2.8.2
 
-Komplett pakke med alt fra V2.7.1.
+Komplett pakke med alt fra V2.8.1.
 
-Nytt i ferdigstillingsdialogen:
+Vercel-feilen `Cannot find name 'main'` kom fra en gammel fil i roten av
+GitHub-repositoryet:
 
-- transporttype viser en rød advarsel tilpasset valget
-- Standard kranbil til bakkeplan:
-  Standard levering leveres normalt kun til bakkeplan og løftes rett av bil.
-- Kranbil stor:
-  Ekstrakostnad utenfor standard leveringsvilkår.
-- Varebil:
-  Innbæring må eventuelt avtales direkte med Waypoint.
+`parse-click-collect.ts`
 
-Det er også lagt inn en egen utvidbar knapp:
-Kommentar til transportør
+Den gamle filen inneholdt JSX-kode, men hadde `.ts`-filtype. Den er ikke den
+aktive parseren under `src/lib/orders`.
 
-Kommentaren lagres på ordren, kan redigeres av administrator og vises som egen
-linje i mailen til transportøren.
+Denne pakken inneholder derfor en trygg kompatibilitetsfil i roten som
+overskriver den gamle filen og bare videresender eksportene til riktig parser:
 
+`src/lib/orders/parse-click-collect.ts`
 
-## Buildfix V2.8.1
-
-Ruten for sletting av enkeltbilder bruker nå den eksisterende eksporten:
-
-`deletePrivateBlobs([pathname])`
-
-Dette retter Turbopack-feilen:
-
-`Export deletePrivateBlob doesn't exist in target module`
+Det anbefales fortsatt å slette alt gammelt innhold i repositoryet før hele
+pakken lastes opp, slik at utdaterte filer ikke blir liggende igjen.

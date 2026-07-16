@@ -1,5 +1,5 @@
 {
-  "version": "2.8.1",
-  "includesAllFrom": "2.8.0",
-  "buildFix": "photo delete route now imports and calls deletePrivateBlobs"
+  "version": "2.8.2",
+  "includesAllFrom": "2.8.1",
+  "buildFix": "Safe root-level compatibility shim replaces stale JSX file"
 }
