@@ -147,17 +147,6 @@ export default function AdminPage() {
     await updateUser(user, { password });
   }
 
-  async function editUserIdentity(user: User) {
-    const displayName = window.prompt("Visningsnavn:", user.displayName);
-    if (displayName === null) return;
-    const username = window.prompt("Brukernavn / jobb-e-post:", user.username);
-    if (username === null) return;
-    await updateUser(user, {
-      displayName: displayName.trim(),
-      username: username.trim()
-    });
-  }
-
   async function addRecipient(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
@@ -277,14 +266,14 @@ export default function AdminPage() {
                 Når testmodus er på, sendes ferdigstillingsmailen kun til
                 jobb-e-posten til den innloggede brukeren. Transportøren
                 mottar ingenting. Når testmodus er av, sendes mailen til
-                Waypoint med innlogget bruker i kopifeltet.
+                transportøren med innlogget bruker i kopifeltet.
               </p>
             </div>
           </div>
 
           <div className="email-mode-controls">
             <label>
-              Waypoint / transportør
+              Transportør e-post
               <input
                 type="email"
                 value={emailSettings.waypointEmail}
@@ -295,12 +284,17 @@ export default function AdminPage() {
                     waypointEmail: event.target.value
                   }))
                 }
-                onBlur={() =>
-                  void updateEmailSettings({
-                    waypointEmail: emailSettings.waypointEmail
-                  })
-                }
               />
+              <button
+                type="button"
+                className="outline-action"
+                disabled={busy || !emailSettings.waypointEmail.trim()}
+                onClick={() => void updateEmailSettings({
+                  waypointEmail: emailSettings.waypointEmail
+                })}
+              >
+                <Save size={17} /> Lagre transportør e-post
+              </button>
             </label>
 
             <button
@@ -425,14 +419,6 @@ export default function AdminPage() {
                   <option value="MANAGER">Leder</option>
                   <option value="ADMIN">Administrator</option>
                 </select>
-
-                <button
-                  className="outline-action compact"
-                  disabled={busy}
-                  onClick={() => void editUserIdentity(user)}
-                >
-                  <Users size={16} /> Endre navn
-                </button>
 
                 <button
                   className="outline-action compact"

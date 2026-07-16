@@ -29,8 +29,6 @@ type Line = {
   quantity: string;
   unit: string;
   model?: string;
-  lineComment?: string;
-  identifierType?: "EAN" | "PLU";
 };
 
 type Fields = {
@@ -110,8 +108,6 @@ export default function NewOrderPage() {
           model?: string | null;
           quantity?: number;
           unit?: string;
-          lineComment?: string | null;
-          identifierType?: "EAN" | "PLU";
         }>;
       };
 
@@ -130,9 +126,7 @@ export default function NewOrderPage() {
             description: item.description ?? item.model ?? "",
             model: item.model ?? "",
             quantity: String(item.quantity ?? 1),
-            unit: item.unit ?? "Stk",
-            lineComment: item.lineComment ?? "",
-            identifierType: item.identifierType ?? "EAN"
+            unit: item.unit ?? "Stk"
           }))
         );
       }

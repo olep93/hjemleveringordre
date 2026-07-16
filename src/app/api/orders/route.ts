@@ -34,7 +34,7 @@ export async function GET() {
         photoCount: Array.isArray(data.photos) ? data.photos.length : 0,
         itemCount: Array.isArray(data.items) ? data.items.length : 0,
         checkedItemCount: Array.isArray(data.items)
-          ? data.items.filter((item: { checked?: boolean; isFreight?: boolean }) => item.checked || item.isFreight).length
+          ? data.items.filter((item: { checked?: boolean; isFreight?: boolean }) => item.checked).length
           : 0,
         importError: data.importError ?? null,
         attachmentCount: Array.isArray(data.attachments) ? data.attachments.length : 0,

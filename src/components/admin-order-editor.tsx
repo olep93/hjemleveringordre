@@ -46,23 +46,25 @@ type Order = {
 
 export function AdminOrderEditor({
   order,
-  onUpdated,
-  canReset = false
+  onUpdated
 }: {
   order: Order;
   onUpdated: () => Promise<void>;
-  canReset?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [draft, setDraft] = useState<Order>({
     ...order,
+    pickupRecipientEmail:
+      order.pickupRecipientEmail || "marcus@waypointlarvik.no",
     items: (order.items ?? []).map((item) => ({ ...item }))
   });
 
   function resetDraft() {
     setDraft({
       ...order,
+      pickupRecipientEmail:
+        order.pickupRecipientEmail || "marcus@waypointlarvik.no",
       items: (order.items ?? []).map((item) => ({ ...item }))
     });
   }
@@ -161,11 +163,9 @@ export function AdminOrderEditor({
         <button className="outline-action" onClick={() => { resetDraft(); setOpen(true); }}>
           <Pencil size={17} /> Rediger hele ordren
         </button>
-{canReset && (
-          <button className="admin-reset-button" onClick={() => void resetToPick()}>
-            <RotateCcw size={17} /> Tilbakestill til «Må plukkes»
-          </button>
-        )}
+        <button className="admin-reset-button" onClick={() => void resetToPick()}>
+          <RotateCcw size={17} /> Tilbakestill til «Må plukkes»
+        </button>
       </div>
     );
   }
@@ -174,7 +174,7 @@ export function AdminOrderEditor({
     <section className="admin-order-editor">
       <div className="admin-order-editor-heading">
         <div>
-          <p className="eyebrow">ORDREREDIGERING</p>
+          <p className="eyebrow">ADMINISTRATOR</p>
           <h2>Rediger hele ordren</h2>
         </div>
         <button onClick={() => setOpen(false)}><X size={20} /></button>
@@ -202,7 +202,7 @@ export function AdminOrderEditor({
       <div className="admin-items-heading">
         <div>
           <h3>Bilder av ferdig plukket ordre</h3>
-          <p>Lagrede bilder kan åpnes her. Administrator kan også slette feilaktige bilder.</p>
+          <p>Administrator kan åpne eller slette feilaktige bilder.</p>
         </div>
       </div>
 
@@ -236,16 +236,14 @@ export function AdminOrderEditor({
                     <ExternalLink size={15} /> Åpne
                   </a>
                 )}
-                {canReset && (
-                  <button
-                    className="admin-item-delete"
-                    type="button"
-                    disabled={saving}
-                    onClick={() => void deletePhoto(index)}
-                  >
-                    <Trash2 size={15} /> Slett bilde
-                  </button>
-                )}
+                <button
+                  className="admin-item-delete"
+                  type="button"
+                  disabled={saving}
+                  onClick={() => void deletePhoto(index)}
+                >
+                  <Trash2 size={15} /> Slett bilde
+                </button>
               </div>
             </article>
           ))}
@@ -284,7 +282,7 @@ export function AdminOrderEditor({
       </div>
 
       <div className="admin-editor-actions">
-{canReset && <button className="admin-reset-button" onClick={() => void resetToPick()}><RotateCcw size={17}/> Tilbakestill</button>}
+        <button className="admin-reset-button" onClick={() => void resetToPick()}><RotateCcw size={17}/> Tilbakestill</button>
         <button className="outline-action" onClick={()=>setOpen(false)}><X size={17}/> Avbryt</button>
         <button className="blue-action" disabled={saving} onClick={()=>void save()}><Save size={17}/> {saving ? "Lagrer …" : "Lagre endringer"}</button>
       </div>

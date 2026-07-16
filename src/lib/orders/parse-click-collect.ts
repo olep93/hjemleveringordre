@@ -2,8 +2,6 @@ export type ClickCollectScannedItem = {
   articleNumber: string;
   description: string;
   model: string | null;
-  lineComment?: string | null;
-  identifierType?: "EAN" | "PLU";
   quantity: number;
   unit: string;
 };
@@ -107,69 +105,6 @@ function findHeader(rows: string[], gtinIndex: number): string | null {
   return null;
 }
 
-
-function normalizeOpenPluName(value: string): string {
-  return clean(value)
-    .replace(/^(?:ÅPEN|APEN|OPEN)\s+PLU\s*/i, "")
-    .replace(/^BYGGEVARER\s*/i, "Byggevarer")
-    .trim();
-}
-
-function parseOpenPluProducts(rows: string[]): ClickCollectScannedItem[] {
-  const items: ClickCollectScannedItem[] = [];
-
-  for (let i = 0; i < rows.length; i++) {
-    const row = clean(rows[i]);
-    const openMatch = row.match(/^(?:ÅPEN|APEN|OPEN)\s+PLU(?:\s+(.+))?$/i);
-    if (!openMatch) continue;
-
-    const previous = clean(rows[i - 1] ?? "");
-    const pluNumber = /^\d{3,8}$/.test(previous) ? previous : "";
-    let name = normalizeOpenPluName(openMatch[1] || "");
-
-    if (!name) {
-      const next = clean(rows[i + 1] ?? "");
-      if (next && !isNoise(next) && !isCategory(next) && !isGtin(next)) {
-        name = normalizeOpenPluName(next);
-      }
-    }
-
-    if (!name) name = "Byggevarer";
-
-    const comments: string[] = [];
-    for (let j = i + 1; j < Math.min(rows.length, i + 6); j++) {
-      const candidate = clean(rows[j]);
-      if (!candidate) continue;
-      if (/^(?:ÅPEN|APEN|OPEN)\s+PLU/i.test(candidate) || isGtin(candidate)) break;
-      if (/^Tilbud\s*#/i.test(candidate) || /^Kommentar\s*:/i.test(candidate)) {
-        comments.push(candidate.replace(/^Kommentar\s*:\s*/i, ""));
-      }
-    }
-
-    const quantityWindow = rows.slice(i, Math.min(rows.length, i + 6));
-    let quantity = 1;
-    for (let j = quantityWindow.length - 1; j >= 0; j--) {
-      const candidate = lastQuantity(quantityWindow[j]);
-      if (candidate !== null && candidate !== Number(pluNumber)) {
-        quantity = candidate;
-        break;
-      }
-    }
-
-    items.push({
-      articleNumber: pluNumber,
-      description: name.charAt(0).toUpperCase() + name.slice(1).toLowerCase(),
-      model: null,
-      lineComment: comments.join(" ") || null,
-      identifierType: "PLU",
-      quantity,
-      unit: "Stk"
-    });
-  }
-
-  return items;
-}
-
 function parseProducts(rows: string[]): ClickCollectScannedItem[] {
   const items: ClickCollectScannedItem[] = [];
   const used = new Set<string>();
@@ -221,8 +156,7 @@ function parseProducts(rows: string[]): ClickCollectScannedItem[] {
       description: header ?? model ?? `Vare ${articleNumber}`,
       model: model && model.toLowerCase() !== header?.toLowerCase() ? model : null,
       quantity,
-      unit,
-      identifierType: "EAN"
+      unit
     });
     used.add(articleNumber);
   }
@@ -250,7 +184,7 @@ export function parseClickCollectText(text: string): ClickCollectScanResult {
     email,
     deliveryAddress: [address, postal].filter(Boolean).join(', ') || null,
     deliveryMethod,
-    items: [...parseProducts(rows), ...parseOpenPluProducts(rows)],
+    items: parseProducts(rows),
     rawText: text
   };
 }

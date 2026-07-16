@@ -200,8 +200,23 @@ export default function OrderPage({
     );
   }, [load]);
 
+  useEffect(() => {
+    if (initialUser.role === "GUEST") return;
+
+    void fetch("/api/admin/settings", { cache: "no-store" })
+      .then(async (response) => {
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error ?? "Kunne ikke hente transportørinnstillinger.");
+        setPickupRecipientEmail(String(result.settings?.waypointEmail ?? "").trim());
+      })
+      .catch(() => {
+        // Direkte sending henter uansett den globale adressen på serveren.
+        // Outlook-knappen varsler brukeren dersom adressen ikke kunne hentes.
+      });
+  }, [initialUser.role]);
+
   const progress = useMemo(() => {
-    const pluckable = (order?.items ?? []).filter((item) => !item.isFreight);
+    const pluckable = order?.items ?? [];
     return {
       checked: pluckable.filter((item) =>
         pickingMode ? draftChecks[item.id] : item.checked
@@ -340,8 +355,13 @@ export default function OrderPage({
   function beginFinalize(){if(!validateBeforeFinalize())return;setPickupDate(fulfillmentMethod==="NEXT_THURSDAY"?thursday(1):fulfillmentMethod==="THIS_THURSDAY"?thursday(0):pickupDate);setShowFulfillment(true)}
   function openOutlookTemplate(current: Order) {
     if (current.source === "CLICK_AND_COLLECT") return;
-    const to = current.pickupRecipientEmail || "";
-    const share = current.pickupShareToken
+    const to = current.pickupRecipientEmail || pickupRecipientEmail.trim();
+    if (!to) {
+      showValidationFeedback("Transportørens e-postadresse mangler i administratorinnstillingene.", {});
+      return;
+    }
+
+        const share = current.pickupShareToken
       ? `${window.location.origin}/pickup/${current.id}?token=${encodeURIComponent(
           current.pickupShareToken
         )}`
@@ -373,6 +393,9 @@ export default function OrderPage({
       "Kommentar fra plukking:",
       current.comment ?? "Ingen kommentar",
       "",
+      "Kommentar til transportør:",
+      current.transportComment ?? "Ingen kommentar",
+      "",
       "Varelinjer:",
       lines,
       "",
@@ -395,6 +418,12 @@ export default function OrderPage({
 
   async function sendWaypointEmail(current: Order) {
     if (current.source === "CLICK_AND_COLLECT") return;
+    const to = current.pickupRecipientEmail || pickupRecipientEmail.trim();
+    if (!to) {
+      showValidationFeedback("Transportørens e-postadresse mangler i administratorinnstillingene.", {});
+      return;
+    }
+
     setSaving(true);
     setError(null);
     setInfo("Sender e-post med original kundeordre og plukkebilder …");
@@ -403,7 +432,7 @@ export default function OrderPage({
       const response = await fetch(`/api/orders/${current.id}/waypoint-email`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({})
+        body: JSON.stringify({ to })
       });
       const result = await response.json();
       if (!response.ok) {
@@ -411,7 +440,7 @@ export default function OrderPage({
       }
       setInfo(
         result.testMode
-          ? `Testmail sendt til din innloggede jobbepost (${result.to}) med ${result.attachmentCount} vedlegg. Waypoint mottok ikke denne testen.`
+          ? `Testmail sendt til din innloggede jobbepost (${result.to}) med ${result.attachmentCount} vedlegg. Transportøren mottok ikke denne testen.`
           : `E-post sendt til ${result.to}, med kopi til ${result.cc}, og ${result.attachmentCount} vedlegg.`
       );
       await load();
@@ -449,6 +478,8 @@ export default function OrderPage({
           pickingSessionEnded: true,
           fulfillmentMethod: finalize ? fulfillmentMethod : undefined,
           pickupDate: finalize ? pickupDate : undefined,
+          transportType: finalize ? transportType : undefined,
+          transportComment: finalize ? transportComment.trim() || null : undefined,
           locationCode: placement === "Kasse Drive-In" ? locationCode : null
         })
       });
@@ -730,12 +761,8 @@ export default function OrderPage({
         {error && <div className="error-box order-alert">{error}</div>}
         {info && <div className="info-message order-alert">{info}</div>}
 
-        {canEdit && (
-          <AdminOrderEditor
-            order={order}
-            onUpdated={load}
-            canReset={initialUser.role === "ADMIN"}
-          />
+        {initialUser.role === "ADMIN" && (
+          <AdminOrderEditor order={order} onUpdated={load} />
         )}
 
         <div className="picking-workflow-banner">
@@ -1092,8 +1119,8 @@ export default function OrderPage({
           order.source !== "CLICK_AND_COLLECT" && (
             <section className="modern-card history-card-spacing outlook-handoff-card">
               <div>
-                <p className="eyebrow">WAYPOINT / TRANSPORT</p>
-                <h2>Send ordren til Waypoint</h2>
+                <p className="eyebrow">TRANSPORTØR</p>
+                <h2>Send ordren til transportør</h2>
                 <p>
                   Direkte sending inkluderer original kundeordre og alle
                   bilder som faktiske vedlegg. I testmodus sendes meldingen
@@ -1136,7 +1163,7 @@ export default function OrderPage({
             ))}
           </div>
         </section>
-        {showFulfillment && <div className="modal-backdrop"><div className="fulfillment-modal"><div className="modal-heading"><div><p className="eyebrow">SISTE STEG</p><h2>Velg utkjøring eller henting</h2></div><button type="button" onClick={()=>setShowFulfillment(false)}><X size={20}/></button></div><div className="fulfillment-options"><button type="button" className={fulfillmentMethod==="THIS_THURSDAY"?"selected":""} onClick={()=>{setFulfillmentMethod("THIS_THURSDAY");setPickupDate(thursday(0))}}><Truck size={20}/><strong>Torsdag inneværende uke</strong><span>{thursday(0)}</span></button><button type="button" className={fulfillmentMethod==="NEXT_THURSDAY"?"selected":""} onClick={()=>{setFulfillmentMethod("NEXT_THURSDAY");setPickupDate(thursday(1))}}><Truck size={20}/><strong>Torsdag neste uke</strong><span>{thursday(1)}</span></button><button type="button" className={fulfillmentMethod==="OWN_VEHICLE"?"selected":""} onClick={()=>setFulfillmentMethod("OWN_VEHICLE")}><Box size={20}/><strong>Egen bil</strong><span>Velg egen dato</span></button></div><label>Dato<input type="date" value={pickupDate} onChange={e=>setPickupDate(e.target.value)}/></label><label>Type transport<select value={transportType} onChange={e=>setTransportType(e.target.value as "STANDARD_CRANE_GROUND"|"LARGE_CRANE"|"VAN")}><option value="STANDARD_CRANE_GROUND">Standard kranbil til bakkeplan</option><option value="LARGE_CRANE">Kranbil stor</option><option value="VAN">Varebil</option></select></label><div className="transport-warning">{transportType==="LARGE_CRANE"?"NB: Dette påløper ekstrakostnad utenfor standard leveringsvilkår, kontakt Waypoint direkte for priser.":transportType==="VAN"?"NB: Innbæring må eventuelt avtales direkte med Waypoint. Dette er kun levering med varebil":"NB: Standard levering leveres normalt kun til bakkeplan og løftes rett av bil. For andre avtaler må transportør kontaktes."}</div><details className="transport-comment-box"><summary>Kommentar til transportør</summary><label>Kommentar til transportør<textarea rows={4} value={transportComment} placeholder="Skriv inn forespørsler eller viktig informasjon til Waypoint..." onChange={e=>setTransportComment(e.target.value)}/></label></details><div className="modal-actions"><button className="outline-action" type="button" onClick={()=>setShowFulfillment(false)}>Tilbake</button><button className="green-action" type="button" disabled={saving||!pickupDate} onClick={()=>void savePicking(true)}><CheckCircle2 size={18}/>Ferdigstill ordre</button></div></div></div>}
+        {showFulfillment && <div className="modal-backdrop"><div className="fulfillment-modal"><div className="modal-heading"><div><p className="eyebrow">SISTE STEG</p><h2>Velg utkjøring eller henting</h2></div><button type="button" onClick={()=>setShowFulfillment(false)}><X size={20}/></button></div><div className="fulfillment-options"><button type="button" className={fulfillmentMethod==="THIS_THURSDAY"?"selected":""} onClick={()=>{setFulfillmentMethod("THIS_THURSDAY");setPickupDate(thursday(0))}}><Truck size={20}/><strong>Torsdag inneværende uke</strong><span>{thursday(0)}</span></button><button type="button" className={fulfillmentMethod==="NEXT_THURSDAY"?"selected":""} onClick={()=>{setFulfillmentMethod("NEXT_THURSDAY");setPickupDate(thursday(1))}}><Truck size={20}/><strong>Torsdag neste uke</strong><span>{thursday(1)}</span></button><button type="button" className={fulfillmentMethod==="OWN_VEHICLE"?"selected":""} onClick={()=>setFulfillmentMethod("OWN_VEHICLE")}><Box size={20}/><strong>Egen bil</strong><span>Velg egen dato</span></button></div><label>Dato<input type="date" value={pickupDate} onChange={e=>setPickupDate(e.target.value)}/></label><label>Type transport<select value={transportType} onChange={e=>setTransportType(e.target.value as "STANDARD_CRANE_GROUND"|"LARGE_CRANE"|"VAN")}><option value="STANDARD_CRANE_GROUND">Standard kranbil til bakkeplan</option><option value="LARGE_CRANE">Kranbil stor</option><option value="VAN">Varebil</option></select></label><div className="transport-warning">{transportType==="LARGE_CRANE"?"NB: Dette påløper ekstrakostnad utenfor standard leveringsvilkår, kontakt transportøren direkte for priser.":transportType==="VAN"?"NB: Innbæring må eventuelt avtales direkte med transportøren. Dette er kun levering med varebil":"NB: Standard levering leveres normalt kun til bakkeplan og løftes rett av bil. For andre avtaler må transportør kontaktes."}</div><details className="transport-comment-box"><summary>Kommentar til transportør</summary><label>Kommentar til transportør<textarea rows={4} value={transportComment} placeholder="Skriv inn forespørsler eller viktig informasjon til transportøren..." onChange={e=>setTransportComment(e.target.value)}/></label></details><div className="modal-actions"><button className="outline-action" type="button" onClick={()=>setShowFulfillment(false)}>Tilbake</button><button className="green-action" type="button" disabled={saving||!pickupDate} onClick={()=>void savePicking(true)}><CheckCircle2 size={18}/>Ferdigstill ordre</button></div></div></div>}
       </section>
     </main>
   );

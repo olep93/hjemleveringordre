@@ -12,7 +12,6 @@ export async function PATCH(
     const body = (await request.json()) as {
       active?: boolean;
       displayName?: string;
-      username?: string;
       role?: UserRole;
       password?: string;
     };
@@ -37,22 +36,6 @@ export async function PATCH(
 
     if (typeof body.active === "boolean") update.active = body.active;
     if (body.displayName?.trim()) update.displayName = body.displayName.trim();
-    if (body.username !== undefined) {
-      const username = body.username.trim();
-      if (!username) {
-        return NextResponse.json({ error: "Brukernavn kan ikke være tomt." }, { status: 400 });
-      }
-      const duplicate = await adminDb
-        .collection("users")
-        .where("usernameLower", "==", username.toLowerCase())
-        .limit(2)
-        .get();
-      if (duplicate.docs.some((doc) => doc.id !== id)) {
-        return NextResponse.json({ error: "Brukernavnet er allerede i bruk." }, { status: 409 });
-      }
-      update.username = username;
-      update.usernameLower = username.toLowerCase();
-    }
     if (body.role) update.role = body.role;
     if (body.password !== undefined) {
       if (body.password.length < 8) {

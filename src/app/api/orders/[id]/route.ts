@@ -233,9 +233,7 @@ export async function PATCH(
       : [];
 
     if (body.adminAction || body.adminEdit) {
-      const editor = body.adminAction
-        ? await requireRole(["ADMIN"])
-        : await requireRole(["EMPLOYEE", "MANAGER", "ADMIN"]);
+      const admin = await requireRole(["ADMIN"]);
 
       if (body.adminAction === "RESET_TO_PICK") {
         const resetItems = currentItems.map((item) => ({
@@ -264,9 +262,9 @@ export async function PATCH(
 
         await ref.collection("events").add({
           type: "ADMIN_RESET_TO_PICK",
-          description: `Ordren ble tilbakestilt til «Må plukkes» av ${editor.displayName}.`,
+          description: `Ordren ble tilbakestilt til «Må plukkes» av ${admin.displayName}.`,
           actorType: "USER",
-          actorName: editor.displayName,
+          actorName: admin.displayName,
           createdAt: FieldValue.serverTimestamp()
         });
 
@@ -299,7 +297,7 @@ export async function PATCH(
                 quantity: Number(item.quantity) || 1,
                 unit: String(item.unit ?? "Stk").trim() || "Stk",
                 checked: Boolean(item.checked),
-                checkedBy: item.checked ? item.checkedBy ?? editor.displayName : null,
+                checkedBy: item.checked ? item.checkedBy ?? admin.displayName : null,
                 checkedAt: item.checked ? item.checkedAt ?? new Date().toISOString() : null,
                 isFreight: Boolean(item.isFreight)
               };
@@ -320,15 +318,18 @@ export async function PATCH(
         transportType: edit.transportType ?? null,
         transportComment: edit.transportComment?.trim() || null,
         pickupDate: edit.pickupDate || null,
+        pickupRecipientEmail:
+          edit.pickupRecipientEmail?.trim().toLowerCase() ||
+          "marcus@waypointlarvik.no",
         items: editedItems,
         updatedAt: FieldValue.serverTimestamp()
       });
 
       await ref.collection("events").add({
-        type: "ORDER_EDITED",
-        description: `Hele ordren og varelinjene ble redigert av ${editor.displayName}.`,
+        type: "ADMIN_ORDER_EDITED",
+        description: `Ordren og varelinjene ble redigert av ${admin.displayName}.`,
         actorType: "USER",
-        actorName: editor.displayName,
+        actorName: admin.displayName,
         createdAt: FieldValue.serverTimestamp()
       });
 
@@ -343,9 +344,7 @@ export async function PATCH(
     const placement =
       "placement" in body ? body.placement?.trim() || null : current.placement ?? null;
 
-    const incompleteItems = nextItems.filter(
-      (item) => !item.checked && !item.isFreight
-    );
+    const incompleteItems = nextItems.filter((item) => !item.checked);
 
     if (body.status === "READY_FOR_LOADING") {
       if (incompleteItems.length > 0) {

@@ -67,7 +67,7 @@ export async function POST(
     const order = snapshot.data()! as WaypointOrder;
     if (order.source === "CLICK_AND_COLLECT") {
       return NextResponse.json(
-        { error: "Klikk & Hent-ordre skal ikke sendes til Waypoint." },
+        { error: "Klikk & Hent-ordre skal ikke sendes til transportør." },
         { status: 400 }
       );
     }
@@ -84,6 +84,8 @@ export async function POST(
       .trim()
       .toLowerCase();
 
+    // The transport recipient is a global administrator setting.
+    // Order data and client payloads must never override it.
     const waypointEmail = configuredWaypointEmail;
 
     const loggedInEmail = String(user.username ?? "")
@@ -102,7 +104,7 @@ export async function POST(
 
     if (!waypointEmail || !waypointEmail.includes("@")) {
       return NextResponse.json(
-        { error: "Waypoint-adressen er ugyldig." },
+        { error: "Transportøradressen er ugyldig." },
         { status: 400 }
       );
     }
@@ -224,7 +226,7 @@ export async function POST(
     await adminDb.collection("orders").doc(id).collection("events").add({
       type: "WAYPOINT_EMAIL_SENT",
       description: testMode
-        ? `Testmail med ${attachments.length} vedlegg ble sendt til ${loggedInEmail} av ${user.displayName}. Planlagt Waypoint-mottaker: ${waypointEmail}.`
+        ? `Testmail med ${attachments.length} vedlegg ble sendt til ${loggedInEmail} av ${user.displayName}. Planlagt transportørmottaker: ${waypointEmail}.`
         : `E-post med ${attachments.length} vedlegg ble sendt til ${waypointEmail}, med kopi til ${loggedInEmail}, av ${user.displayName}.`,
       actorType: "USER",
       actorName: user.displayName,

@@ -14,7 +14,7 @@ import {
   Truck,
   UserCircle2
 } from "lucide-react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 const navigation = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard, exact: true },
@@ -31,12 +31,14 @@ export function AppHeader({
   user: { displayName: string; role: string };
   children?: React.ReactNode;
 }) {
+  const router = useRouter();
   const pathname = usePathname();
   const isGuest = user.role === "GUEST";
 
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
-    window.location.assign("/");
+    router.replace("/");
+    router.refresh();
   }
 
   return (

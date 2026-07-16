@@ -10,7 +10,7 @@ const settingsRef = adminDb.collection("appSettings").doc("email");
 
 export async function GET() {
   try {
-    await requireRole(["ADMIN"]);
+    await requireRole(["EMPLOYEE", "MANAGER", "ADMIN"]);
 
     const snapshot = await settingsRef.get();
     const data = snapshot.data();
@@ -67,7 +67,7 @@ export async function PATCH(request: NextRequest) {
 
       if (!email || !email.includes("@")) {
         return NextResponse.json(
-          { error: "Waypoint-adressen er ugyldig." },
+          { error: "Transportøradressen er ugyldig." },
           { status: 400 }
         );
       }

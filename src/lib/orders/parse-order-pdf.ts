@@ -37,7 +37,7 @@ type PositionedText = {
   y: number;
 };
 
-const PARSER_VERSION = "obsbygg-mupdf-v11-open-plu-canonical";
+const PARSER_VERSION = "obsbygg-mupdf-v12-open-plu-flattened";
 
 function clean(value?: string | null): string {
   return String(value ?? "")
@@ -399,9 +399,9 @@ function parseItemRow(row: string, index: number): ParsedOrderItem | null {
     deliveredQuantity: parseDecimal(deliveredQuantity),
     price: parseDecimal(price),
     lineTotal: parseDecimal(lineTotal),
-    checked: isFreight,
-    checkedBy: isFreight ? "SYSTEM" : null,
-    checkedAt: isFreight ? new Date().toISOString() : null,
+    checked: false,
+    checkedBy: null,
+    checkedAt: null,
     isFreight
   };
 }
@@ -519,9 +519,9 @@ function parseGenericPluRow(
     deliveredQuantity: null,
     price: null,
     lineTotal: null,
-    checked: isFreight,
-    checkedBy: isFreight ? "SYSTEM" : null,
-    checkedAt: isFreight ? new Date().toISOString() : null,
+    checked: false,
+    checkedBy: null,
+    checkedAt: null,
     isFreight
   };
 }
@@ -589,23 +589,27 @@ function parseFlattenedFallback(rows: string[]): ParsedOrderItem[] {
   const tableStart = text.search(/\bEAN\/PLU\b/i);
   if (tableStart < 0) return [];
 
-  const tableText = text.slice(tableStart);
-  const eanMatches = [...tableText.matchAll(/\b\d{12,14}\b/g)];
+  const afterHeader = text.slice(tableStart);
+  const tableEnd = afterHeader.search(/\b(?:TOTALSUM|TOTAL SUM|SUM)\b/i);
+  const tableText = tableEnd > 0 ? afterHeader.slice(0, tableEnd) : afterHeader;
 
+  // Structured PDF extraction can place each table column on a separate
+  // visual row. In that case parseRows() cannot see a complete row and the
+  // fallback must recognize both ordinary 12–14 digit EANs and short PLUs.
+  // Restrict short values to the known ÅPEN PLU codes to avoid interpreting
+  // quantities, dates and customer numbers as products.
+  const identifiers = [...tableText.matchAll(/\b(?:20032|29034|90646|\d{12,14})\b/g)];
   const items: ParsedOrderItem[] = [];
 
-  for (let index = 0; index < eanMatches.length; index++) {
-    const current = eanMatches[index];
-    const next = eanMatches[index + 1];
-
+  for (let index = 0; index < identifiers.length; index++) {
+    const current = identifiers[index];
+    const next = identifiers[index + 1];
     const start = current.index ?? 0;
-    const end = next?.index ?? tableText.search(/\b(?:SUM|TOTALSUM|TOTAL SUM)\b/i);
+    const end = next?.index ?? tableText.length;
+    const chunk = clean(tableText.slice(start, end));
 
-    const chunk = clean(
-      tableText.slice(start, end > start ? end : tableText.length)
-    );
-
-    const item = parseItemRow(chunk, items.length);
+    const item = parseItemRow(chunk, items.length) ??
+      parseGenericPluRow(chunk, [], items.length);
     if (item) items.push(item);
   }
 
@@ -635,8 +639,10 @@ export async function parseOrderPdf(buffer: Buffer): Promise<ParsedOrder> {
   const rawText = rows.join("\n");
 
   const rowItems = parseRows(rows);
-  const fallbackItems =
-    rowItems.length > 0 ? [] : parseFlattenedFallback(rows);
+  // Always run the flattened fallback as well. Some PDFs expose ordinary EAN
+  // rows correctly while short ÅPEN PLU rows are split across PDF text spans.
+  // deduplicate() removes any ordinary lines found by both strategies.
+  const fallbackItems = parseFlattenedFallback(rows);
 
   return {
     orderNumber: extractOrderNumber(rawText),
