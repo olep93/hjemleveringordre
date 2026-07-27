@@ -76,7 +76,7 @@ export default function NewOrderPage() {
     if (!next.type.startsWith("image/")) return;
 
     setScanning(true);
-    setScanMessage("Leser kundenavn, ordre og varelinjer fra bildet …");
+    setScanMessage("Behandler kamerabildet og leser kundenavn, ordre og varelinjer …");
     setError(null);
 
     try {
@@ -84,7 +84,7 @@ export default function NewOrderPage() {
       form.set("file", next);
 
       const controller = new AbortController();
-      const timeout = window.setTimeout(() => controller.abort(), 55000);
+      const timeout = window.setTimeout(() => controller.abort(), 59000);
       const response = await fetch("/api/orders/click-collect/scan", {
         method: "POST",
         body: form,
@@ -283,7 +283,7 @@ export default function NewOrderPage() {
               </strong>
               <p>
                 {click
-                  ? "Skanneren leser ordrenummer, kunde, GTIN, varenavn og antall automatisk."
+                  ? "Kamerabildet behandles med OCR og leser ordrenummer, kunde, GTIN, varenavn og antall automatisk."
                   : "PDF tolkes automatisk."}
               </p>
             </div>
