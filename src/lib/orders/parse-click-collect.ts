@@ -113,7 +113,7 @@ function extractGtin(value: string): string | null {
 function unitFrom(value: string): string | null {
   const lower = normalizedLower(value);
   if (/\bmeter\b/.test(lower)) return 'Meter';
-  if (/\bstk\b/.test(lower)) return 'Stk';
+  if (/\bstk\b|\bstykk\b/.test(lower)) return 'Stk';
   if (/\bpk\b|\bpakke\b/.test(lower)) return 'Pk';
   if (/\bsett\b/.test(lower)) return 'Sett';
   if (/\bm\b/.test(lower)) return 'M';
@@ -151,7 +151,19 @@ function parseProducts(rows: string[]): ClickCollectScannedItem[] {
 
     const articleNumber = rawArticleNumber;
     const header = findHeader(rows, i);
-    const windowRows = rows.slice(i, Math.min(rows.length, i + 5));
+    let itemEnd = i + 1;
+    while (itemEnd < Math.min(rows.length, i + 5)) {
+      const nextRow = rows[itemEnd];
+      if (
+        extractGtin(nextRow) ||
+        isCategory(nextRow) ||
+        productHeaderCandidate(nextRow)
+      ) {
+        break;
+      }
+      itemEnd++;
+    }
+    const windowRows = rows.slice(i, itemEnd);
     const combined = windowRows.join(' ');
 
     const unit = windowRows.map(unitFrom).find(Boolean) ?? unitFrom(combined) ?? 'Stk';
