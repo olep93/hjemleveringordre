@@ -51,9 +51,14 @@ const emptyFields: Fields = {
   comment: ""
 };
 
+function isImageFile(file: File): boolean {
+  return file.type.startsWith("image/") || /\.(?:jpe?g|png|webp|heic|heif)$/i.test(file.name);
+}
+
 export default function NewOrderPage() {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const [mode, setMode] = useState<"STANDARD" | "CLICK_AND_COLLECT">("STANDARD");
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -73,7 +78,7 @@ export default function NewOrderPage() {
   }
 
   async function scanClickCollect(next: File) {
-    if (!next.type.startsWith("image/")) return;
+    if (!isImageFile(next)) return;
 
     setScanning(true);
     setScanMessage("Behandler kamerabildet og leser kundenavn, ordre og varelinjer …");
@@ -156,7 +161,7 @@ export default function NewOrderPage() {
 
     setFile(next);
     setPreview(
-      next.type.startsWith("image/") ? URL.createObjectURL(next) : null
+      isImageFile(next) ? URL.createObjectURL(next) : null
     );
 
     if (click) {
@@ -264,12 +269,14 @@ export default function NewOrderPage() {
 
       <form className="form-card" onSubmit={submit}>
         <div
-          className="clipboard-upload-zone"
+          className={`clipboard-upload-zone${click ? " scanner-upload-zone" : ""}`}
           tabIndex={0}
           onPaste={paste}
           onDrop={drop}
           onDragOver={(event) => event.preventDefault()}
-          onClick={() => inputRef.current?.click()}
+          onClick={() => {
+            if (!click) inputRef.current?.click();
+          }}
         >
           {preview ? (
             <img src={preview} alt="Ordrelapp" />
@@ -278,14 +285,41 @@ export default function NewOrderPage() {
               {click ? <ScanLine size={36} /> : <FileUp size={34} />}
               <strong>
                 {click
-                  ? "Lim inn eller fotografer Klikk & Hent-ordren"
+                  ? "Skann Klikk & Hent-ordren"
                   : "Velg PDF eller bilde"}
               </strong>
               <p>
                 {click
-                  ? "Kamerabildet behandles med OCR og leser ordrenummer, kunde, GTIN, varenavn og antall automatisk."
+                  ? "Ta et nytt bilde eller last opp et eksisterende bilde. Ordrenummer, kunde og varelinjer leses automatisk."
                   : "PDF tolkes automatisk."}
               </p>
+            </div>
+          )}
+
+          {click && (
+            <div className="scan-source-actions">
+              <button
+                type="button"
+                className="scan-camera-action"
+                disabled={scanning}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  cameraInputRef.current?.click();
+                }}
+              >
+                <Camera size={21} /> Ta bilde
+              </button>
+              <button
+                type="button"
+                className="scan-upload-action"
+                disabled={scanning}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  inputRef.current?.click();
+                }}
+              >
+                <FileUp size={21} /> Last opp bilde
+              </button>
             </div>
           )}
 
@@ -293,11 +327,25 @@ export default function NewOrderPage() {
             ref={inputRef}
             type="file"
             accept={click ? "image/*" : "application/pdf,image/*"}
-            capture={click ? "environment" : undefined}
-            onChange={(event: ChangeEvent<HTMLInputElement>) =>
-              void selectFile(event.target.files?.[0] ?? null)
-            }
+            onChange={(event: ChangeEvent<HTMLInputElement>) => {
+              const next = event.target.files?.[0] ?? null;
+              event.target.value = "";
+              void selectFile(next);
+            }}
           />
+          {click && (
+            <input
+              ref={cameraInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={(event: ChangeEvent<HTMLInputElement>) => {
+                const next = event.target.files?.[0] ?? null;
+                event.target.value = "";
+                void selectFile(next);
+              }}
+            />
+          )}
         </div>
 
         {scanning && (

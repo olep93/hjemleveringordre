@@ -64,15 +64,22 @@ export async function POST(request: NextRequest) {
     const cropHeight = Math.max(1, Math.min(height, Math.round(height * 0.72)));
     const targetWidth = Math.min(2800, Math.max(1800, width));
 
-    const prepared = await base
-      .extract({ left: 0, top: 0, width, height: cropHeight })
-      .resize({ width: targetWidth, withoutEnlargement: false })
-      .grayscale()
-      .normalize()
-      .linear(1.18, -18)
-      .sharpen({ sigma: 1.15 })
-      .png({ compressionLevel: 6 })
-      .toBuffer();
+    const prepare = (topOnly: boolean) => {
+      let pipeline = sharp(source, { failOn: "none" }).rotate();
+      if (topOnly) {
+        pipeline = pipeline.extract({ left: 0, top: 0, width, height: cropHeight });
+      }
+      return pipeline
+        .resize({ width: targetWidth, withoutEnlargement: false })
+        .grayscale()
+        .normalize()
+        .linear(1.18, -18)
+        .sharpen({ sigma: 1.15 })
+        .png({ compressionLevel: 6 })
+        .toBuffer();
+    };
+
+    const prepared = await prepare(true);
 
     worker = await createWorker("eng");
     await worker.setParameters({
@@ -88,16 +95,16 @@ export async function POST(request: NextRequest) {
     let selectedScore = scoreClickCollectScan(scan);
     let strategy = "auto-top-crop";
 
-    // Tabeller fra mobilbilder kan bli lest bedre som spredt tekst. Kjør bare et
-    // ekstra forsøk når første resultat faktisk er svakt, slik at normal skanning
-    // fortsatt holder seg innenfor Vercels kjøretidsgrense.
+    // Ved et svakt førsteforsøk leses hele arket. Varetabellen kan gå lenger ned
+    // enn standardskjemaet, og skal aldri forsvinne på grunn av beskjæringen.
     if (selectedScore < 40) {
       await worker.setParameters({
         tessedit_pageseg_mode: PSM.SPARSE_TEXT,
         preserve_interword_spaces: "1",
         user_defined_dpi: "300"
       });
-      const sparseResult = await worker.recognize(prepared);
+      const fullImage = await prepare(false);
+      const sparseResult = await worker.recognize(fullImage);
       const sparseScan = parseClickCollectText(sparseResult.data.text);
       const sparseScore = scoreClickCollectScan(sparseScan);
 
@@ -106,7 +113,7 @@ export async function POST(request: NextRequest) {
         selectedConfidence = sparseResult.data.confidence;
         scan = sparseScan;
         selectedScore = sparseScore;
-        strategy = "sparse-top-crop";
+        strategy = "sparse-full-image";
       }
     }
 

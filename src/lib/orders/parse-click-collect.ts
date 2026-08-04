@@ -71,7 +71,43 @@ function isNoise(value: string): boolean {
 }
 
 function isGtin(value: string): boolean {
-  return /^\d{12,14}$/.test(digits(value));
+  return extractGtin(value) !== null;
+}
+
+function extractGtin(value: string): string | null {
+  const row = clean(value).replace(
+    /\s+\d+(?:[.,]\d+)?\s*(?:stk|pk|pakke|sett|meter|m)\s*$/i,
+    ''
+  );
+  const contiguous = row.match(/(?:^|\D)(\d{12,14})(?=\D|$)/)?.[1];
+  if (contiguous) return contiguous;
+
+  const candidates = row.match(/[0-9OoIl|][0-9OoIl| .-]{10,24}[0-9OoIl|]/g) ?? [];
+
+  for (const candidate of candidates) {
+    const normalized = candidate
+      .replace(/[Oo]/g, '0')
+      .replace(/[Il|]/g, '1')
+      .replace(/\D/g, '');
+
+    // OCR kan ta med antallet etter GTIN-et i samme tekstbit. En gyldig
+    // kontrollsiffer-test finner da riktig prefiks uten å gjøre antallet til
+    // en del av varenummeret.
+    for (const length of [14, 13, 12]) {
+      const possible = normalized.slice(0, length);
+      if (possible.length !== length) continue;
+      const payload = possible.slice(0, -1).split('').reverse();
+      const sum = payload.reduce(
+        (total, digit, index) => total + Number(digit) * (index % 2 === 0 ? 3 : 1),
+        0
+      );
+      if ((10 - (sum % 10)) % 10 === Number(possible.at(-1))) return possible;
+    }
+
+    if (/^\d{12,14}$/.test(normalized)) return normalized;
+  }
+
+  return null;
 }
 
 function unitFrom(value: string): string | null {
@@ -110,10 +146,10 @@ function parseProducts(rows: string[]): ClickCollectScannedItem[] {
   const used = new Set<string>();
 
   for (let i = 0; i < rows.length; i++) {
-    const match = clean(rows[i]).match(/(?:^|\s)(\d{12,14})(?:\s|$)/);
-    if (!match || used.has(match[1])) continue;
+    const rawArticleNumber = extractGtin(rows[i]);
+    if (!rawArticleNumber || used.has(rawArticleNumber)) continue;
 
-    const articleNumber = match[1];
+    const articleNumber = rawArticleNumber;
     const header = findHeader(rows, i);
     const windowRows = rows.slice(i, Math.min(rows.length, i + 5));
     const combined = windowRows.join(' ');
@@ -132,7 +168,8 @@ function parseProducts(rows: string[]): ClickCollectScannedItem[] {
     for (let j = i; j < Math.min(rows.length, i + 4); j++) {
       const row = clean(rows[j]);
       if (j === i) {
-        const after = clean(row.replace(articleNumber, ''));
+        const gtinCandidate = row.match(/[0-9OoIl|][0-9OoIl| .-]{10,24}[0-9OoIl|]/)?.[0];
+        const after = clean(gtinCandidate ? row.replace(gtinCandidate, '') : row);
         if (after && /[A-Za-zÆØÅæøå]/.test(after)) modelParts.push(after);
       } else if (
         !isNoise(row) && !isCategory(row) && !isGtin(row) &&
