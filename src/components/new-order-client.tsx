@@ -14,6 +14,7 @@ import {
   Trash2
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { parseClickCollectText } from "@/lib/orders/parse-click-collect";
 import {
   ChangeEvent,
   ClipboardEvent,
@@ -94,6 +95,134 @@ async function compressForUpload(file: File): Promise<File> {
   }
 }
 
+function detectDocumentBoundsInBrowser(image: HTMLImageElement) {
+  const detection = document.createElement("canvas");
+  detection.width = 240;
+  detection.height = Math.max(
+    1,
+    Math.round((image.naturalHeight * detection.width) / image.naturalWidth)
+  );
+  const context = detection.getContext("2d", { willReadFrequently: true });
+  if (!context) {
+    return { left: 0, top: 0, width: image.naturalWidth, height: image.naturalHeight };
+  }
+  context.drawImage(image, 0, 0, detection.width, detection.height);
+  const pixels = context.getImageData(0, 0, detection.width, detection.height).data;
+  const visited = new Uint8Array(detection.width * detection.height);
+  let best: {
+    count: number;
+    minX: number;
+    minY: number;
+    maxX: number;
+    maxY: number;
+  } | null = null;
+
+  for (let start = 0; start < visited.length; start++) {
+    const pixel = start * 4;
+    const gray = pixels[pixel] * 0.299 + pixels[pixel + 1] * 0.587 + pixels[pixel + 2] * 0.114;
+    if (visited[start] || gray < 125) continue;
+    const queue = [start];
+    visited[start] = 1;
+    let cursor = 0;
+    let count = 0;
+    let minX = detection.width;
+    let minY = detection.height;
+    let maxX = 0;
+    let maxY = 0;
+
+    while (cursor < queue.length) {
+      const index = queue[cursor++];
+      const x = index % detection.width;
+      const y = Math.floor(index / detection.width);
+      count++;
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x);
+      maxY = Math.max(maxY, y);
+
+      for (const neighbor of [index - 1, index + 1, index - detection.width, index + detection.width]) {
+        if (neighbor < 0 || neighbor >= visited.length || visited[neighbor]) continue;
+        const neighborX = neighbor % detection.width;
+        const neighborPixel = neighbor * 4;
+        const neighborGray =
+          pixels[neighborPixel] * 0.299 +
+          pixels[neighborPixel + 1] * 0.587 +
+          pixels[neighborPixel + 2] * 0.114;
+        if (Math.abs(neighborX - x) > 1 || neighborGray < 125) continue;
+        visited[neighbor] = 1;
+        queue.push(neighbor);
+      }
+    }
+    if (!best || count > best.count) best = { count, minX, minY, maxX, maxY };
+  }
+
+  if (
+    !best ||
+    best.count < detection.width * detection.height * 0.12 ||
+    best.maxX - best.minX < detection.width * 0.45 ||
+    best.maxY - best.minY < detection.height * 0.45
+  ) {
+    return { left: 0, top: 0, width: image.naturalWidth, height: image.naturalHeight };
+  }
+
+  const padding = 4;
+  const scaleX = image.naturalWidth / detection.width;
+  const scaleY = image.naturalHeight / detection.height;
+  const left = Math.max(0, Math.floor((best.minX - padding) * scaleX));
+  const top = Math.max(0, Math.floor((best.minY - padding) * scaleY));
+  const right = Math.min(image.naturalWidth, Math.ceil((best.maxX + padding + 1) * scaleX));
+  const bottom = Math.min(image.naturalHeight, Math.ceil((best.maxY + padding + 1) * scaleY));
+  return { left, top, width: right - left, height: bottom - top };
+}
+
+async function prepareForBrowserOcr(file: File): Promise<HTMLCanvasElement> {
+  const url = URL.createObjectURL(file);
+  try {
+    const image = new Image();
+    image.src = url;
+    await image.decode();
+
+    const bounds = detectDocumentBoundsInBrowser(image);
+    // Finn arket før utsnittet tas, slik at kameraavstand og mørk bakgrunn ikke
+    // flytter områdene parseren skal lese.
+    const sourceHeight = Math.max(1, Math.round(bounds.height * 0.8));
+    const targetWidth = Math.min(2200, Math.max(1800, bounds.width));
+    const scale = targetWidth / bounds.width;
+    const canvas = document.createElement("canvas");
+    canvas.width = targetWidth;
+    canvas.height = Math.max(1, Math.round(sourceHeight * scale));
+    const context = canvas.getContext("2d", { willReadFrequently: true });
+    if (!context) throw new Error("Nettleseren kunne ikke klargjøre bildet.");
+    context.drawImage(
+      image,
+      bounds.left,
+      bounds.top,
+      bounds.width,
+      sourceHeight,
+      0,
+      0,
+      canvas.width,
+      canvas.height
+    );
+
+    const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
+    for (let index = 0; index < pixels.data.length; index += 4) {
+      const gray =
+        pixels.data[index] * 0.299 +
+        pixels.data[index + 1] * 0.587 +
+        pixels.data[index + 2] * 0.114;
+      const enhanced = Math.max(0, Math.min(255, gray * 1.18 - 18));
+      pixels.data[index] = enhanced;
+      pixels.data[index + 1] = enhanced;
+      pixels.data[index + 2] = enhanced;
+    }
+    context.putImageData(pixels, 0, 0);
+    return canvas;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
 async function responseJson(response: Response): Promise<Record<string, unknown>> {
   const text = await response.text();
   try {
@@ -135,36 +264,30 @@ export default function NewOrderPage() {
     setError(null);
 
     try {
-      const form = new FormData();
-      form.set("file", next);
-
-      const controller = new AbortController();
-      const timeout = window.setTimeout(() => controller.abort(), 59000);
-      const response = await fetch("/api/orders/click-collect/scan", {
-        method: "POST",
-        body: form,
-        signal: controller.signal
+      const prepared = await prepareForBrowserOcr(next);
+      setScanMessage("Starter tekstlesing direkte på telefonen …");
+      const { createWorker, PSM } = await import("tesseract.js");
+      const worker = await createWorker("eng", undefined, {
+        logger: (message) => {
+          if (message.status === "recognizing text") {
+            setScanMessage(
+              `Leser ordren på telefonen … ${Math.round(message.progress * 100)} %`
+            );
+          }
+        }
       });
-      window.clearTimeout(timeout);
-      const result = await responseJson(response);
-
-      if (!response.ok) {
-        throw new Error(String(result.error ?? "Bildet kunne ikke skannes."));
+      let scan: ReturnType<typeof parseClickCollectText>;
+      try {
+        await worker.setParameters({
+          tessedit_pageseg_mode: PSM.AUTO,
+          preserve_interword_spaces: "1",
+          user_defined_dpi: "300"
+        });
+        const result = await worker.recognize(prepared);
+        scan = parseClickCollectText(result.data.text);
+      } finally {
+        await worker.terminate().catch(() => undefined);
       }
-
-      const scan = result.scan as {
-        orderNumber?: string | null;
-        customerName?: string | null;
-        phone?: string | null;
-        deliveryAddress?: string | null;
-        items?: Array<{
-          articleNumber?: string;
-          description?: string;
-          model?: string | null;
-          quantity?: number;
-          unit?: string;
-        }>;
-      };
 
       setFields((current) => ({
         ...current,
