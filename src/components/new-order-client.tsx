@@ -3,7 +3,6 @@
 import Link from "next/link";
 import {
   ArrowLeft,
-  Camera,
   CheckCircle2,
   ClipboardPaste,
   FileText,
@@ -109,7 +108,6 @@ async function responseJson(response: Response): Promise<Record<string, unknown>
 export default function NewOrderPage() {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
   const [mode, setMode] = useState<"STANDARD" | "CLICK_AND_COLLECT">("STANDARD");
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -225,6 +223,15 @@ export default function NewOrderPage() {
     } else {
       setFile(next);
     }
+  }
+
+  function clearSelectedImage() {
+    if (preview) URL.revokeObjectURL(preview);
+    setFile(null);
+    setPreview(null);
+    setScanMessage(null);
+    setError(null);
+    if (inputRef.current) inputRef.current.value = "";
   }
 
   function paste(event: ClipboardEvent<HTMLDivElement>) {
@@ -355,18 +362,7 @@ export default function NewOrderPage() {
           )}
 
           {click && (
-            <div className="scan-source-actions">
-              <button
-                type="button"
-                className="scan-camera-action"
-                disabled={scanning}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  cameraInputRef.current?.click();
-                }}
-              >
-                <Camera size={21} /> Ta bilde
-              </button>
+            <div className={`scan-source-actions${preview ? "" : " single"}`}>
               <button
                 type="button"
                 className="scan-upload-action"
@@ -376,8 +372,21 @@ export default function NewOrderPage() {
                   inputRef.current?.click();
                 }}
               >
-                <FileUp size={21} /> Last opp bilde
+                <FileUp size={21} /> Velg / ta bilde
               </button>
+              {preview && (
+                <button
+                  type="button"
+                  className="scan-clear-action"
+                  disabled={scanning}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    clearSelectedImage();
+                  }}
+                >
+                  <Trash2 size={20} /> Fjern bilde
+                </button>
+              )}
             </div>
           )}
 
@@ -391,19 +400,6 @@ export default function NewOrderPage() {
               void selectFile(next);
             }}
           />
-          {click && (
-            <input
-              ref={cameraInputRef}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              onChange={(event: ChangeEvent<HTMLInputElement>) => {
-                const next = event.target.files?.[0] ?? null;
-                event.target.value = "";
-                void selectFile(next);
-              }}
-            />
-          )}
         </div>
 
         {scanning && (
