@@ -63,7 +63,7 @@ function spatialItemDetails(
         !quantityColumnOnly ||
         (quantityHeader
           ? word.left >= quantityHeader.left - imageWidth * 0.06
-          : word.left >= imageWidth * 0.78)
+          : word.left >= imageWidth * 0.58)
       )
       .map((word) => ({
         word,
@@ -90,9 +90,13 @@ function spatialItemDetails(
           Math.abs(b.word.top + b.word.height / 2 - gtinCenterY)
       )[0];
 
-    const quantity = quantityWord?.match?.[1]
+    const parsedQuantity = quantityWord?.match?.[1]
       ? Number(quantityWord.match[1].replace(",", "."))
       : undefined;
+    const quantity =
+      parsedQuantity && parsedQuantity > 0 && parsedQuantity <= 10000
+        ? parsedQuantity
+        : undefined;
     const normalizedUnit = unitWord?.normalized;
     const unit = /^(?:meter|moter|motor|aotor|ter|m)$/.test(normalizedUnit ?? "")
       ? "Meter"
@@ -307,8 +311,14 @@ export async function POST(request: NextRequest) {
     scan = {
       ...scan,
       orderNumber: scan.orderNumber ?? headerScan.orderNumber,
-      customerName: headerScan.customerName ?? scan.customerName,
-      phone: headerScan.phone ?? scan.phone,
+      customerName:
+        [scan.customerName, headerScan.customerName]
+          .filter((value): value is string => Boolean(value))
+          .sort((a, b) => b.length - a.length)[0] ?? null,
+      phone:
+        [headerScan.phone, scan.phone].find((value) => value?.length === 8) ??
+        headerScan.phone ??
+        scan.phone,
       email: headerScan.email ?? scan.email,
       deliveryAddress: headerScan.deliveryAddress ?? scan.deliveryAddress,
       deliveryMethod: headerScan.deliveryMethod ?? scan.deliveryMethod
@@ -352,7 +362,8 @@ export async function POST(request: NextRequest) {
     const primaryDetails = spatialItemDetails(
       firstResult.data.tsv,
       firstResult.data.tsv,
-      targetWidth
+      targetWidth,
+      true
     );
     const tableDetails = spatialItemDetails(
       tableResult.data.tsv,
@@ -363,12 +374,30 @@ export async function POST(request: NextRequest) {
     scan.items = scan.items.map((item) => {
       const primaryDetail = primaryDetails.get(item.articleNumber);
       const tableDetail = tableDetails.get(item.articleNumber);
+      const tableQuantity =
+        tableDetail?.quantity &&
+        (tableDetail.quantity <= 50 || tableDetail.unit)
+          ? tableDetail.quantity
+          : undefined;
+      const primaryQuantity =
+        primaryDetail?.quantity &&
+        (primaryDetail.quantity <= 50 || primaryDetail.unit)
+          ? primaryDetail.quantity
+          : undefined;
+      const detectedQuantity = tableQuantity ?? primaryQuantity;
+      const itemText = `${item.description} ${item.model ?? ""}`;
+      const looksLikeModelNumber = detectedQuantity
+        ? new RegExp(
+            `(?:\\bA\\s*${detectedQuantity}\\b|\\bM(?:M)?[- ]?${detectedQuantity}\\s*PK\\b)`,
+            "i"
+          ).test(itemText)
+        : false;
       return {
         ...item,
         quantity:
-          tableDetail?.quantity ??
-          primaryDetail?.quantity ??
-          item.quantity,
+          !looksLikeModelNumber && detectedQuantity
+            ? detectedQuantity
+            : item.quantity,
         unit:
           tableDetail?.unit ??
           primaryDetail?.unit ??

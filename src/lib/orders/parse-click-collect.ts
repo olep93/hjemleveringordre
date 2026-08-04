@@ -45,7 +45,9 @@ function digits(value?: string | null): string {
 
 function normalizeOrderNumber(value?: string | null): string | null {
   const match = clean(value).match(/\d{5,10}(?:-\d+)?/);
-  return match?.[0] ?? null;
+  if (!match) return null;
+  if (/^\d{8}$/.test(match[0])) return `${match[0].slice(0, 7)}-${match[0].slice(7)}`;
+  return match[0];
 }
 
 function normalizePhone(value?: string | null): string | null {
@@ -127,7 +129,18 @@ function lastQuantity(value: string): number | null {
   const matches = [...clean(value).matchAll(/(?:^|\s)(\d+(?:[.,]\d+)?)(?=\s|$)/g)];
   if (!matches.length) return null;
   const number = Number(matches.at(-1)![1].replace(',', '.'));
-  return Number.isFinite(number) ? number : null;
+  return Number.isFinite(number) && number > 0 && number <= 10000 ? number : null;
+}
+
+function quantityBesideUnit(value: string): number | null {
+  const row = clean(value);
+  const afterUnit = row.match(
+    /\b(?:stk|stykk|pk|pakke|sett|meter|m)\b[^0-9]{0,12}(\d+(?:[.,]\d+)?)\s*$/i
+  );
+  const beforeUnit = row.match(
+    /(?:^|\s)(\d+(?:[.,]\d+)?)\s*(?:stk|stykk|pk|pakke|sett|meter|m)\b\s*$/i
+  );
+  return lastQuantity(afterUnit?.[1] ?? beforeUnit?.[1] ?? '');
 }
 
 function productHeaderCandidate(value: string): boolean {
@@ -172,7 +185,7 @@ function parseProducts(rows: string[]): ClickCollectScannedItem[] {
     const unit = windowRows.map(unitFrom).find(Boolean) ?? unitFrom(combined) ?? 'Stk';
     let quantity = 1;
     for (let j = windowRows.length - 1; j >= 0; j--) {
-      const candidate = lastQuantity(windowRows[j]);
+      const candidate = quantityBesideUnit(windowRows[j]);
       if (candidate !== null && candidate !== Number(articleNumber)) {
         quantity = candidate;
         break;
