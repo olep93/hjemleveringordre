@@ -9,111 +9,6 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-type PositionedWord = {
-  left: number;
-  top: number;
-  width: number;
-  height: number;
-  text: string;
-};
-
-function positionedWords(tsv?: string | null): PositionedWord[] {
-  if (!tsv) return [];
-  return tsv
-    .split("\n")
-    .slice(1)
-    .map((line) => {
-      const columns = line.split("\t");
-      return {
-        left: Number(columns[6]),
-        top: Number(columns[7]),
-        width: Number(columns[8]),
-        height: Number(columns[9]),
-        text: columns.slice(11).join(" ").trim()
-      };
-    })
-    .filter((word) => word.text && Number.isFinite(word.left));
-}
-
-function spatialItemDetails(
-  anchorTsv: string | null | undefined,
-  valueTsv: string | null | undefined,
-  imageWidth: number,
-  quantityColumnOnly = false
-): Map<string, { quantity?: number; unit?: string }> {
-  const anchors = positionedWords(anchorTsv);
-  const words = positionedWords(valueTsv);
-  const details = new Map<string, { quantity?: number; unit?: string }>();
-  const gtins = anchors
-    .map((word) => ({ word, gtin: word.text.replace(/\D/g, "") }))
-    .filter(({ gtin }) => /^\d{12,14}$/.test(gtin));
-  const quantityHeader = words.find(
-    (word) => word.text.toLowerCase().replace(/[^a-z]/g, "") === "antall"
-  );
-
-  for (const { word: gtinWord, gtin } of gtins) {
-    const gtinCenterY = gtinWord.top + gtinWord.height / 2;
-    const rightSide = words.filter(
-      (word) =>
-        word.left > gtinWord.left + imageWidth * 0.42 &&
-        Math.abs(word.top + word.height / 2 - gtinCenterY) <= imageWidth * 0.045
-    );
-    const quantityWord = rightSide
-      .filter((word) =>
-        !quantityColumnOnly ||
-        (quantityHeader
-          ? word.left >= quantityHeader.left - imageWidth * 0.06
-          : word.left >= imageWidth * 0.58)
-      )
-      .map((word) => ({
-        word,
-        match: word.text.replace(/["']/g, "").match(/^\s*(\d{1,5}(?:[.,]\d+)?)\s*$/)
-      }))
-      .filter(({ match }) => match)
-      .sort(
-        (a, b) =>
-          Math.abs(a.word.top + a.word.height / 2 - gtinCenterY) -
-          Math.abs(b.word.top + b.word.height / 2 - gtinCenterY)
-      )[0];
-
-    const unitWord = rightSide
-      .map((word) => ({
-        word,
-        normalized: word.text.toLowerCase().replace(/[^a-zæøå]/g, "")
-      }))
-      .filter(({ normalized }) =>
-        /^(?:stk|stykk|pk|pakke|sett|meter|moter|motor|aotor|ter|m)$/.test(normalized)
-      )
-      .sort(
-        (a, b) =>
-          Math.abs(a.word.top + a.word.height / 2 - gtinCenterY) -
-          Math.abs(b.word.top + b.word.height / 2 - gtinCenterY)
-      )[0];
-
-    const parsedQuantity = quantityWord?.match?.[1]
-      ? Number(quantityWord.match[1].replace(",", "."))
-      : undefined;
-    const quantity =
-      parsedQuantity && parsedQuantity > 0 && parsedQuantity <= 10000
-        ? parsedQuantity
-        : undefined;
-    const normalizedUnit = unitWord?.normalized;
-    const unit = /^(?:meter|moter|motor|aotor|ter|m)$/.test(normalizedUnit ?? "")
-      ? "Meter"
-      : /^(?:pk|pakke)$/.test(normalizedUnit ?? "")
-        ? "Pk"
-        : /^(?:sett)$/.test(normalizedUnit ?? "")
-          ? "Sett"
-          : /^(?:stk|stykk)$/.test(normalizedUnit ?? "")
-            ? "Stk"
-            : undefined;
-
-    if (quantity || unit) details.set(gtin, { quantity, unit });
-  }
-
-  return details;
-}
-
 async function detectDocumentBounds(
   source: Buffer,
   sharp: typeof import("sharp"),
@@ -190,6 +85,7 @@ function looksLikeSupportedImage(file: File): boolean {
 
 export async function POST(request: NextRequest) {
   let worker: import("tesseract.js").Worker | null = null;
+  const scanStartedAt = Date.now();
 
   try {
     await requireRole(["EMPLOYEE", "MANAGER", "ADMIN"]);
@@ -248,7 +144,7 @@ export async function POST(request: NextRequest) {
         )
       )
     };
-    const targetWidth = Math.min(2600, Math.max(1800, documentBounds.width));
+    const targetWidth = Math.min(2200, Math.max(1800, documentBounds.width));
     const prepared = await sharp(source, { failOn: "none" })
       .rotate()
       .extract(documentBounds)
@@ -267,150 +163,35 @@ export async function POST(request: NextRequest) {
       user_defined_dpi: "300"
     });
 
-    const firstResult = await worker.recognize(prepared, {}, { tsv: true });
+    const firstOcrStartedAt = Date.now();
+    const firstResult = await worker.recognize(prepared);
+    const firstOcrMs = Date.now() - firstOcrStartedAt;
     let selectedText = firstResult.data.text;
     let selectedConfidence = firstResult.data.confidence;
     let scan = parseClickCollectText(selectedText);
     let selectedScore = scoreClickCollectScan(scan);
-    let strategy = "document-relative-regions";
+    let strategy = "fast-auto-document";
 
-    // Når arket er funnet kan ordrehodet leses relativt til selve arket, ikke
-    // mobilbildet. Dette tåler både bakgrunn, ulik kameraavstand og forskyvning.
-    const headerTop = Math.min(
-      height - 1,
-      detectedBounds.top + Math.round(detectedBounds.height * 0.06)
-    );
-    const headerHeight = Math.max(
-      1,
-      Math.min(
-        height - headerTop,
-        Math.round(detectedBounds.height * 0.4)
-      )
-    );
-    const headerImage = await sharp(source, { failOn: "none" })
-      .rotate()
-      .extract({
-        left: detectedBounds.left,
-        top: headerTop,
-        width: detectedBounds.width,
-        height: headerHeight
-      })
-      .resize({ width: 2400, withoutEnlargement: false })
-      .grayscale()
-      .normalize()
-      .sharpen({ sigma: 1.1 })
-      .png({ compressionLevel: 6 })
-      .toBuffer();
-    await worker.setParameters({
-      tessedit_pageseg_mode: PSM.SPARSE_TEXT,
-      preserve_interword_spaces: "1",
-      user_defined_dpi: "300"
-    });
-    const headerResult = await worker.recognize(headerImage);
-    const headerScan = parseClickCollectText(headerResult.data.text);
-    scan = {
-      ...scan,
-      orderNumber: scan.orderNumber ?? headerScan.orderNumber,
-      customerName:
-        [scan.customerName, headerScan.customerName]
-          .filter((value): value is string => Boolean(value))
-          .sort((a, b) => b.length - a.length)[0] ?? null,
-      phone:
-        [headerScan.phone, scan.phone].find((value) => value?.length === 8) ??
-        headerScan.phone ??
-        scan.phone,
-      email: headerScan.email ?? scan.email,
-      deliveryAddress: headerScan.deliveryAddress ?? scan.deliveryAddress,
-      deliveryMethod: headerScan.deliveryMethod ?? scan.deliveryMethod
-    };
-
-    // Tabellen finnes også relativt til arket. En spredt tekstpass beholder
-    // kolonneposisjoner, slik at Antall/Enhet kan kobles til nærmeste GTIN.
-    const tableTop = Math.min(
-      height - 1,
-      detectedBounds.top + Math.round(detectedBounds.height * 0.375)
-    );
-    const tableHeight = Math.max(
-      1,
-      Math.min(
-        height - tableTop,
-        Math.round(detectedBounds.height * 0.42)
-      )
-    );
-    const tableWidth = 3000;
-    const tableImage = await sharp(source, { failOn: "none" })
-      .rotate()
-      .extract({
-        left: detectedBounds.left,
-        top: tableTop,
-        width: detectedBounds.width,
-        height: tableHeight
-      })
-      .resize({ width: tableWidth, withoutEnlargement: false })
-      .grayscale()
-      .normalize()
-      .sharpen({ sigma: 1.1 })
-      .png({ compressionLevel: 6 })
-      .toBuffer();
-    const tableResult = await worker.recognize(tableImage, {}, { tsv: true });
-    const tableScan = parseClickCollectText(tableResult.data.text);
-    for (const tableItem of tableScan.items) {
-      if (!scan.items.some((item) => item.articleNumber === tableItem.articleNumber)) {
-        scan.items.push(tableItem);
+    // Produksjonsfunksjonen har en stram tidsgrense. Når første pass finner
+    // varelinjer returneres resultatet med én gang. Et ekstra pass kjøres bare
+    // når første pass fant null varer.
+    if (scan.items.length === 0 && Date.now() - scanStartedAt < 25_000) {
+      await worker.setParameters({
+        tessedit_pageseg_mode: PSM.SPARSE_TEXT,
+        preserve_interword_spaces: "1",
+        user_defined_dpi: "300"
+      });
+      const sparseResult = await worker.recognize(prepared);
+      const sparseScan = parseClickCollectText(sparseResult.data.text);
+      const sparseScore = scoreClickCollectScan(sparseScan);
+      if (sparseScore > selectedScore) {
+        scan = sparseScan;
+        selectedText = sparseResult.data.text;
+        selectedConfidence = sparseResult.data.confidence;
+        selectedScore = sparseScore;
+        strategy = "fallback-sparse-document";
       }
     }
-    const primaryDetails = spatialItemDetails(
-      firstResult.data.tsv,
-      firstResult.data.tsv,
-      targetWidth,
-      true
-    );
-    const tableDetails = spatialItemDetails(
-      tableResult.data.tsv,
-      tableResult.data.tsv,
-      tableWidth,
-      true
-    );
-    scan.items = scan.items.map((item) => {
-      const primaryDetail = primaryDetails.get(item.articleNumber);
-      const tableDetail = tableDetails.get(item.articleNumber);
-      const tableQuantity =
-        tableDetail?.quantity &&
-        (tableDetail.quantity <= 50 || tableDetail.unit)
-          ? tableDetail.quantity
-          : undefined;
-      const primaryQuantity =
-        primaryDetail?.quantity &&
-        (primaryDetail.quantity <= 50 || primaryDetail.unit)
-          ? primaryDetail.quantity
-          : undefined;
-      const detectedQuantity = tableQuantity ?? primaryQuantity;
-      const itemText = `${item.description} ${item.model ?? ""}`;
-      const looksLikeModelNumber = detectedQuantity
-        ? new RegExp(
-            `(?:\\bA\\s*${detectedQuantity}\\b|\\bM(?:M)?[- ]?${detectedQuantity}\\s*PK\\b)`,
-            "i"
-          ).test(itemText)
-        : false;
-      return {
-        ...item,
-        quantity:
-          !looksLikeModelNumber && detectedQuantity
-            ? detectedQuantity
-            : item.quantity,
-        unit:
-          tableDetail?.unit ??
-          primaryDetail?.unit ??
-          item.unit
-      };
-    });
-    selectedText = `${selectedText}\n${headerResult.data.text}\n${tableResult.data.text}`;
-    selectedConfidence = Math.max(
-      selectedConfidence,
-      headerResult.data.confidence,
-      tableResult.data.confidence
-    );
-    selectedScore = scoreClickCollectScan(scan);
 
     if (!scan.orderNumber && !scan.customerName && scan.items.length === 0) {
       return NextResponse.json(
@@ -420,7 +201,9 @@ export async function POST(request: NextRequest) {
           diagnostics: {
             textLength: selectedText.trim().length,
             confidence: selectedConfidence,
-            strategy
+            strategy,
+            firstOcrMs,
+            totalMs: Date.now() - scanStartedAt
           }
         },
         { status: 422 }
@@ -441,7 +224,9 @@ export async function POST(request: NextRequest) {
         textLength: scan.rawText.length,
         itemCount: scan.items.length,
         score: selectedScore,
-        strategy
+        strategy,
+        firstOcrMs,
+        totalMs: Date.now() - scanStartedAt
       }
     });
   } catch (error) {
