@@ -8,6 +8,7 @@
     "start": "next start"
   },
   "dependencies": {
+    "@tesseract.js-data/eng": "1.0.0",
     "firebase": "^12.0.0",
     "firebase-admin": "^13.4.0",
     "lucide-react": "^0.468.0",

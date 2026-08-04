@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import path from "node:path";
 import { requireRole } from "@/lib/auth";
 import {
   parseClickCollectText,
@@ -156,7 +157,21 @@ export async function POST(request: NextRequest) {
       .png({ compressionLevel: 6 })
       .toBuffer();
 
-    worker = await createWorker("eng");
+    // Språkmodellen følger deployen. Uten eksplisitt langPath laster Tesseract
+    // ca. 10 MB fra CDN ved hver kaldstart, noe som kan bruke opp hele
+    // tidsbudsjettet i en serverless-funksjon.
+    const langPath = path.join(
+      process.cwd(),
+      "node_modules",
+      "@tesseract.js-data",
+      "eng",
+      "4.0.0_best_int"
+    );
+    worker = await createWorker("eng", undefined, {
+      langPath,
+      gzip: true,
+      cacheMethod: "none"
+    });
     await worker.setParameters({
       tessedit_pageseg_mode: PSM.AUTO,
       preserve_interword_spaces: "1",
