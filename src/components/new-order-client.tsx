@@ -55,6 +55,57 @@ function isImageFile(file: File): boolean {
   return file.type.startsWith("image/") || /\.(?:jpe?g|png|webp|heic|heif)$/i.test(file.name);
 }
 
+async function compressForUpload(file: File): Promise<File> {
+  if (file.size <= 2_500_000) return file;
+
+  const url = URL.createObjectURL(file);
+  try {
+    const image = new Image();
+    image.src = url;
+    await image.decode();
+
+    const maxSide = 2200;
+    const scale = Math.min(1, maxSide / Math.max(image.naturalWidth, image.naturalHeight));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+    canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+    const context = canvas.getContext("2d");
+    if (!context) return file;
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+    let compressed: Blob | null = null;
+    for (const quality of [0.86, 0.76, 0.66]) {
+      compressed = await new Promise<Blob | null>((resolve) =>
+        canvas.toBlob(resolve, "image/jpeg", quality)
+      );
+      if (compressed && compressed.size <= 2_500_000) break;
+    }
+
+    if (!compressed) return file;
+    const basename = file.name.replace(/\.[^.]+$/, "") || "klikk-hent";
+    return new File([compressed], `${basename}.jpg`, {
+      type: "image/jpeg",
+      lastModified: file.lastModified
+    });
+  } catch {
+    return file;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+async function responseJson(response: Response): Promise<Record<string, unknown>> {
+  const text = await response.text();
+  try {
+    return JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    if (response.status === 413) {
+      return { error: "Bildet er for stort til å lastes opp. Velg lavere oppløsning eller ta bildet litt nærmere arket." };
+    }
+    return { error: `Tjenesten svarte med feilkode ${response.status}. Prøv på nytt.` };
+  }
+}
+
 export default function NewOrderPage() {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -96,10 +147,10 @@ export default function NewOrderPage() {
         signal: controller.signal
       });
       window.clearTimeout(timeout);
-      const result = await response.json();
+      const result = await responseJson(response);
 
       if (!response.ok) {
-        throw new Error(result.error ?? "Bildet kunne ikke skannes.");
+        throw new Error(String(result.error ?? "Bildet kunne ikke skannes."));
       }
 
       const scan = result.scan as {
@@ -159,13 +210,20 @@ export default function NewOrderPage() {
   async function selectFile(next: File | null) {
     if (!next) return;
 
-    setFile(next);
     setPreview(
       isImageFile(next) ? URL.createObjectURL(next) : null
     );
 
     if (click) {
-      await scanClickCollect(next);
+      const uploadFile = await compressForUpload(next);
+      if (uploadFile.size > 3_500_000) {
+        setError("Bildet er for stort til å lastes opp. Velg lavere oppløsning eller ta bildet litt nærmere arket.");
+        return;
+      }
+      setFile(uploadFile);
+      await scanClickCollect(uploadFile);
+    } else {
+      setFile(next);
     }
   }
 
@@ -221,13 +279,13 @@ export default function NewOrderPage() {
         method: "POST",
         body: formData
       });
-      const result = await response.json();
+      const result = await responseJson(response);
 
       if (!response.ok) {
-        throw new Error(result.error ?? "Kunne ikke opprette ordre.");
+        throw new Error(String(result.error ?? "Kunne ikke opprette ordre."));
       }
 
-      router.push(`/orders/${result.id}`);
+      router.push(`/orders/${String(result.id)}`);
     } catch (submitError) {
       setError(
         submitError instanceof Error
