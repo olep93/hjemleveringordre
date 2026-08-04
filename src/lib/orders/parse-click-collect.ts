@@ -74,13 +74,23 @@ function isGtin(value: string): boolean {
   return extractGtin(value) !== null;
 }
 
+function hasValidGtinCheckDigit(value: string): boolean {
+  if (!/^\d{12,14}$/.test(value)) return false;
+  const payload = value.slice(0, -1).split('').reverse();
+  const sum = payload.reduce(
+    (total, digit, index) => total + Number(digit) * (index % 2 === 0 ? 3 : 1),
+    0
+  );
+  return (10 - (sum % 10)) % 10 === Number(value.at(-1));
+}
+
 function extractGtin(value: string): string | null {
   const row = clean(value).replace(
     /\s+\d+(?:[.,]\d+)?\s*(?:stk|pk|pakke|sett|meter|m)\s*$/i,
     ''
   );
   const contiguous = row.match(/(?:^|\D)(\d{12,14})(?=\D|$)/)?.[1];
-  if (contiguous) return contiguous;
+  if (contiguous && hasValidGtinCheckDigit(contiguous)) return contiguous;
 
   const candidates = row.match(/[0-9OoIl|][0-9OoIl| .-]{10,24}[0-9OoIl|]/g) ?? [];
 
@@ -96,15 +106,8 @@ function extractGtin(value: string): string | null {
     for (const length of [14, 13, 12]) {
       const possible = normalized.slice(0, length);
       if (possible.length !== length) continue;
-      const payload = possible.slice(0, -1).split('').reverse();
-      const sum = payload.reduce(
-        (total, digit, index) => total + Number(digit) * (index % 2 === 0 ? 3 : 1),
-        0
-      );
-      if ((10 - (sum % 10)) % 10 === Number(possible.at(-1))) return possible;
+      if (hasValidGtinCheckDigit(possible)) return possible;
     }
-
-    if (/^\d{12,14}$/.test(normalized)) return normalized;
   }
 
   return null;
@@ -227,7 +230,7 @@ export function parseClickCollectText(text: string): ClickCollectScanResult {
   const craneDelivery = rows.find((row) => /\bKranbil\b/i.test(row));
   const deliveryMethod = craneDelivery
     ? /bakkeplan/i.test(craneDelivery)
-      ? craneDelivery
+      ? craneDelivery.replace(/^[^A-Za-zÆØÅæøå]+/, '')
       : 'Kranbil bakkeplan'
     : labelValue(rows, /^Leveransemetode\s*:?\s*(.*)$/i);
 

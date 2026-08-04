@@ -36,14 +36,20 @@ function positionedWords(tsv?: string | null): PositionedWord[] {
 }
 
 function spatialItemDetails(
-  tsv: string | null | undefined,
-  imageWidth: number
+  anchorTsv: string | null | undefined,
+  valueTsv: string | null | undefined,
+  imageWidth: number,
+  quantityColumnOnly = false
 ): Map<string, { quantity?: number; unit?: string }> {
-  const words = positionedWords(tsv);
+  const anchors = positionedWords(anchorTsv);
+  const words = positionedWords(valueTsv);
   const details = new Map<string, { quantity?: number; unit?: string }>();
-  const gtins = words
+  const gtins = anchors
     .map((word) => ({ word, gtin: word.text.replace(/\D/g, "") }))
     .filter(({ gtin }) => /^\d{12,14}$/.test(gtin));
+  const quantityHeader = words.find(
+    (word) => word.text.toLowerCase().replace(/[^a-z]/g, "") === "antall"
+  );
 
   for (const { word: gtinWord, gtin } of gtins) {
     const gtinCenterY = gtinWord.top + gtinWord.height / 2;
@@ -53,6 +59,12 @@ function spatialItemDetails(
         Math.abs(word.top + word.height / 2 - gtinCenterY) <= imageWidth * 0.045
     );
     const quantityWord = rightSide
+      .filter((word) =>
+        !quantityColumnOnly ||
+        (quantityHeader
+          ? word.left >= quantityHeader.left - imageWidth * 0.06
+          : word.left >= imageWidth * 0.78)
+      )
       .map((word) => ({
         word,
         match: word.text.replace(/["']/g, "").match(/^\s*(\d{1,5}(?:[.,]\d+)?)\s*$/)
@@ -96,6 +108,75 @@ function spatialItemDetails(
   }
 
   return details;
+}
+
+async function detectDocumentBounds(
+  source: Buffer,
+  sharp: typeof import("sharp"),
+  width: number,
+  height: number
+): Promise<{ left: number; top: number; width: number; height: number }> {
+  const detectionWidth = 240;
+  const { data, info } = await sharp(source, { failOn: "none" })
+    .rotate()
+    .resize({ width: detectionWidth })
+    .grayscale()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  const visited = new Uint8Array(info.width * info.height);
+  let best: { count: number; minX: number; minY: number; maxX: number; maxY: number } | null = null;
+
+  for (let start = 0; start < data.length; start++) {
+    if (visited[start] || data[start] < 125) continue;
+    const queue = [start];
+    visited[start] = 1;
+    let cursor = 0;
+    let count = 0;
+    let minX = info.width;
+    let minY = info.height;
+    let maxX = 0;
+    let maxY = 0;
+
+    while (cursor < queue.length) {
+      const index = queue[cursor++];
+      const x = index % info.width;
+      const y = Math.floor(index / info.width);
+      count++;
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x);
+      maxY = Math.max(maxY, y);
+
+      const neighbors = [index - 1, index + 1, index - info.width, index + info.width];
+      for (const neighbor of neighbors) {
+        if (neighbor < 0 || neighbor >= data.length || visited[neighbor]) continue;
+        const neighborX = neighbor % info.width;
+        if (Math.abs(neighborX - x) > 1 || data[neighbor] < 125) continue;
+        visited[neighbor] = 1;
+        queue.push(neighbor);
+      }
+    }
+
+    if (!best || count > best.count) best = { count, minX, minY, maxX, maxY };
+  }
+
+  if (
+    !best ||
+    best.count < info.width * info.height * 0.12 ||
+    best.maxX - best.minX < info.width * 0.45 ||
+    best.maxY - best.minY < info.height * 0.45
+  ) {
+    return { left: 0, top: 0, width, height };
+  }
+
+  const padding = 4;
+  const scaleX = width / info.width;
+  const scaleY = height / info.height;
+  const left = Math.max(0, Math.floor((best.minX - padding) * scaleX));
+  const top = Math.max(0, Math.floor((best.minY - padding) * scaleY));
+  const right = Math.min(width, Math.ceil((best.maxX + padding + 1) * scaleX));
+  const bottom = Math.min(height, Math.ceil((best.maxY + padding + 1) * scaleY));
+  return { left, top, width: right - left, height: bottom - top };
 }
 
 function looksLikeSupportedImage(file: File): boolean {
@@ -148,27 +229,32 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Klikk & Hent-lappen har normalt all relevant tekst i øvre 60–70 % av arket.
-    // Å beskjære den store tomme nederdelen gjør OCR både raskere og mer presis.
-    const cropHeight = Math.max(1, Math.min(height, Math.round(height * 0.72)));
-    const targetWidth = Math.min(2800, Math.max(1800, width));
-
-    const prepare = (topOnly: boolean) => {
-      let pipeline = sharp(source, { failOn: "none" }).rotate();
-      if (topOnly) {
-        pipeline = pipeline.extract({ left: 0, top: 0, width, height: cropHeight });
-      }
-      return pipeline
-        .resize({ width: targetWidth, withoutEnlargement: false })
-        .grayscale()
-        .normalize()
-        .linear(1.18, -18)
-        .sharpen({ sigma: 1.15 })
-        .png({ compressionLevel: 6 })
-        .toBuffer();
+    // Finn den største sammenhengende lyse flaten først. Dermed normaliseres
+    // arket uavhengig av kameraavstand og hvor mye bakgrunn bildet inneholder.
+    const detectedBounds = await detectDocumentBounds(source, sharp, width, height);
+    // Ordreinnholdet ligger øverst på det påviste arket. Den nederste delen er
+    // normalt blank og fjernes først etter at selve arket er funnet.
+    const documentBounds = {
+      ...detectedBounds,
+      height: Math.max(
+        1,
+        Math.min(
+          detectedBounds.height,
+          Math.round((detectedBounds.height * 0.8) / 16) * 16
+        )
+      )
     };
-
-    const prepared = await prepare(true);
+    const targetWidth = Math.min(2600, Math.max(1800, documentBounds.width));
+    const prepared = await sharp(source, { failOn: "none" })
+      .rotate()
+      .extract(documentBounds)
+      .resize({ width: targetWidth, withoutEnlargement: false })
+      .grayscale()
+      .normalize()
+      .linear(1.18, -18)
+      .sharpen({ sigma: 1.15 })
+      .png({ compressionLevel: 6 })
+      .toBuffer();
 
     worker = await createWorker("eng");
     await worker.setParameters({
@@ -182,15 +268,29 @@ export async function POST(request: NextRequest) {
     let selectedConfidence = firstResult.data.confidence;
     let scan = parseClickCollectText(selectedText);
     let selectedScore = scoreClickCollectScan(scan);
-    let strategy = "auto-top-crop";
+    let strategy = "document-relative-regions";
 
-    // Les ordrehodet separat. På mobilbilder er tabellen og ordrehodet så ulikt
-    // skalert at ett OCR-oppsett sjelden leser begge godt.
-    const headerTop = Math.round(height * 0.06);
-    const headerHeight = Math.min(height - headerTop, Math.round(height * 0.36));
+    // Når arket er funnet kan ordrehodet leses relativt til selve arket, ikke
+    // mobilbildet. Dette tåler både bakgrunn, ulik kameraavstand og forskyvning.
+    const headerTop = Math.min(
+      height - 1,
+      detectedBounds.top + Math.round(detectedBounds.height * 0.06)
+    );
+    const headerHeight = Math.max(
+      1,
+      Math.min(
+        height - headerTop,
+        Math.round(detectedBounds.height * 0.4)
+      )
+    );
     const headerImage = await sharp(source, { failOn: "none" })
       .rotate()
-      .extract({ left: 0, top: headerTop, width, height: headerHeight })
+      .extract({
+        left: detectedBounds.left,
+        top: headerTop,
+        width: detectedBounds.width,
+        height: headerHeight
+      })
       .resize({ width: 2400, withoutEnlargement: false })
       .grayscale()
       .normalize()
@@ -214,14 +314,28 @@ export async function POST(request: NextRequest) {
       deliveryMethod: headerScan.deliveryMethod ?? scan.deliveryMethod
     };
 
-    // En egen tabellpass beholder ordposisjonene. Dermed kan verdiene i høyre
-    // kolonner kobles til riktig GTIN selv om Tesseract returnerer kolonnevis tekst.
-    const tableTop = Math.round(height * 0.34);
-    const tableHeight = Math.min(height - tableTop, Math.round(height * 0.38));
+    // Tabellen finnes også relativt til arket. En spredt tekstpass beholder
+    // kolonneposisjoner, slik at Antall/Enhet kan kobles til nærmeste GTIN.
+    const tableTop = Math.min(
+      height - 1,
+      detectedBounds.top + Math.round(detectedBounds.height * 0.375)
+    );
+    const tableHeight = Math.max(
+      1,
+      Math.min(
+        height - tableTop,
+        Math.round(detectedBounds.height * 0.42)
+      )
+    );
     const tableWidth = 3000;
     const tableImage = await sharp(source, { failOn: "none" })
       .rotate()
-      .extract({ left: 0, top: tableTop, width, height: tableHeight })
+      .extract({
+        left: detectedBounds.left,
+        top: tableTop,
+        width: detectedBounds.width,
+        height: tableHeight
+      })
       .resize({ width: tableWidth, withoutEnlargement: false })
       .grayscale()
       .normalize()
@@ -229,17 +343,36 @@ export async function POST(request: NextRequest) {
       .png({ compressionLevel: 6 })
       .toBuffer();
     const tableResult = await worker.recognize(tableImage, {}, { tsv: true });
-    const primaryDetails = spatialItemDetails(firstResult.data.tsv, targetWidth);
-    const tableDetails = spatialItemDetails(tableResult.data.tsv, tableWidth);
+    const tableScan = parseClickCollectText(tableResult.data.text);
+    for (const tableItem of tableScan.items) {
+      if (!scan.items.some((item) => item.articleNumber === tableItem.articleNumber)) {
+        scan.items.push(tableItem);
+      }
+    }
+    const primaryDetails = spatialItemDetails(
+      firstResult.data.tsv,
+      firstResult.data.tsv,
+      targetWidth
+    );
+    const tableDetails = spatialItemDetails(
+      tableResult.data.tsv,
+      tableResult.data.tsv,
+      tableWidth,
+      true
+    );
     scan.items = scan.items.map((item) => {
-      const detail = {
-        ...primaryDetails.get(item.articleNumber),
-        ...tableDetails.get(item.articleNumber)
-      };
+      const primaryDetail = primaryDetails.get(item.articleNumber);
+      const tableDetail = tableDetails.get(item.articleNumber);
       return {
         ...item,
-        quantity: detail.quantity ?? item.quantity,
-        unit: detail.unit ?? item.unit
+        quantity:
+          tableDetail?.quantity ??
+          primaryDetail?.quantity ??
+          item.quantity,
+        unit:
+          tableDetail?.unit ??
+          primaryDetail?.unit ??
+          item.unit
       };
     });
     selectedText = `${selectedText}\n${headerResult.data.text}\n${tableResult.data.text}`;
@@ -249,7 +382,6 @@ export async function POST(request: NextRequest) {
       tableResult.data.confidence
     );
     selectedScore = scoreClickCollectScan(scan);
-    strategy = "auto-header-spatial-table";
 
     if (!scan.orderNumber && !scan.customerName && scan.items.length === 0) {
       return NextResponse.json(
@@ -276,7 +408,7 @@ export async function POST(request: NextRequest) {
         sourceName: file.name,
         sourceWidth: width,
         sourceHeight: height,
-        cropHeight,
+        documentBounds,
         textLength: scan.rawText.length,
         itemCount: scan.items.length,
         score: selectedScore,
