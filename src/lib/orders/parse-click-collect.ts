@@ -55,6 +55,15 @@ function normalizePhone(value?: string | null): string | null {
   return valueDigits.length >= 8 && valueDigits.length <= 15 ? valueDigits : null;
 }
 
+function normalizeCustomerName(value?: string | null): string | null {
+  const normalized = clean(value)
+    // En løs bokstav helt til slutt er typisk støy fra tabellkant eller stor
+    // ordrenummertekst ved siden av kundelinjen.
+    .replace(/\s+[A-ZÆØÅ](?:[.,])?$/, '')
+    .trim();
+  return normalized || null;
+}
+
 const CATEGORY_WORDS = new Set([
   'konstruksjonsvirke', 'terrasse', 'maling', 'verktøy', 'byggevarer',
   'trelast', 'isolasjon', 'festemidler', 'utvendig kledning', 'innvendig kledning'
@@ -235,7 +244,7 @@ export function parseClickCollectText(text: string): ClickCollectScanResult {
   const orderNumber = normalizeOrderNumber(
     labelValue(rows, /(?:[OQ0]rd(?:re|ro)?nr\.?|Ordrenummer)\s*[:.;]?\s*(.*)$/i)
   );
-  const customerName = labelValue(rows, /^Kunde\s*:\s*(.*)$/i);
+  const customerName = normalizeCustomerName(labelValue(rows, /^Kunde\s*:\s*(.*)$/i));
   const address = labelValue(rows, /^Adresse\s*[:;]\s*(.*)$/i);
   const postal = labelValue(rows, /^Postnr\.?\s*:\s*(.*)$/i);
   const phone = normalizePhone(labelValue(rows, /^(?:Telefon|Mobiltelefon)\s*:\s*(.*)$/i));

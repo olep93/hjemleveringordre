@@ -175,7 +175,162 @@ function detectDocumentBoundsInBrowser(image: HTMLImageElement) {
   return { left, top, width: right - left, height: bottom - top };
 }
 
-async function prepareForBrowserOcr(file: File): Promise<HTMLCanvasElement> {
+function cropCanvas(
+  source: HTMLCanvasElement,
+  topRatio: number,
+  heightRatio: number,
+  targetWidth: number
+): HTMLCanvasElement {
+  const top = Math.round(source.height * topRatio);
+  const height = Math.max(1, Math.min(source.height - top, Math.round(source.height * heightRatio)));
+  const canvas = document.createElement("canvas");
+  canvas.width = targetWidth;
+  canvas.height = Math.max(1, Math.round((height * targetWidth) / source.width));
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("Nettleseren kunne ikke lage bildeutsnitt.");
+  context.drawImage(source, 0, top, source.width, height, 0, 0, canvas.width, canvas.height);
+  return canvas;
+}
+
+type PositionedWord = {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+  text: string;
+};
+
+function positionedWords(tsv?: string | null): PositionedWord[] {
+  if (!tsv) return [];
+  return tsv
+    .split("\n")
+    .slice(1)
+    .map((line) => {
+      const columns = line.split("\t");
+      return {
+        left: Number(columns[6]),
+        top: Number(columns[7]),
+        width: Number(columns[8]),
+        height: Number(columns[9]),
+        text: columns.slice(11).join(" ").trim()
+      };
+    })
+    .filter((word) => word.text && Number.isFinite(word.left));
+}
+
+function spatialItemDetails(
+  tsv: string | null | undefined,
+  imageWidth: number
+): Map<string, { quantity?: number; unit?: string }> {
+  const words = positionedWords(tsv);
+  const details = new Map<string, { quantity?: number; unit?: string }>();
+  const quantityHeader = words.find(
+    (word) => word.text.toLowerCase().replace(/[^a-z]/g, "") === "antall"
+  );
+
+  for (const gtinWord of words) {
+    const gtin = gtinWord.text.replace(/\D/g, "");
+    if (!/^\d{12,14}$/.test(gtin)) continue;
+    const centerY = gtinWord.top + gtinWord.height / 2;
+    const rowWords = words.filter(
+      (word) =>
+        word.left > gtinWord.left + imageWidth * 0.42 &&
+        Math.abs(word.top + word.height / 2 - centerY) <= imageWidth * 0.045
+    );
+    const quantityWord = rowWords
+      .filter((word) =>
+        word.left >=
+        Math.max(
+          imageWidth * 0.8,
+          quantityHeader ? quantityHeader.left - imageWidth * 0.06 : 0
+        )
+      )
+      .map((word) => ({
+        word,
+        match: word.text.replace(/["']/g, "").match(/^\s*(\d{1,5}(?:[.,]\d+)?)\s*$/)
+      }))
+      .filter(({ match }) => match)
+      .sort(
+        (a, b) =>
+          Math.abs(a.word.top + a.word.height / 2 - centerY) -
+          Math.abs(b.word.top + b.word.height / 2 - centerY)
+      )[0];
+    const unitWord = rowWords
+      .map((word) => ({
+        word,
+        normalized: word.text.toLowerCase().replace(/[^a-zæøå]/g, "")
+      }))
+      .filter(({ normalized }) =>
+        /^(?:stk|stykk|pk|pakke|sett|meter|meler|moter|motor|aotor|ter|m)$/.test(normalized)
+      )
+      .sort(
+        (a, b) =>
+          Math.abs(a.word.top + a.word.height / 2 - centerY) -
+          Math.abs(b.word.top + b.word.height / 2 - centerY)
+      )[0];
+    const parsedQuantity = quantityWord?.match?.[1]
+      ? Number(quantityWord.match[1].replace(",", "."))
+      : undefined;
+    const quantity =
+      parsedQuantity && parsedQuantity > 0 && parsedQuantity <= 10000
+        ? parsedQuantity
+        : undefined;
+    const normalizedUnit = unitWord?.normalized;
+    const unit = /^(?:meter|meler|moter|motor|aotor|ter|m)$/.test(normalizedUnit ?? "")
+      ? "Meter"
+      : /^(?:pk|pakke)$/.test(normalizedUnit ?? "")
+        ? "Pk"
+        : /^(?:sett)$/.test(normalizedUnit ?? "")
+          ? "Sett"
+          : /^(?:stk|stykk)$/.test(normalizedUnit ?? "")
+            ? "Stk"
+            : undefined;
+    if (quantity || unit) details.set(gtin, { quantity, unit });
+  }
+  return details;
+}
+
+function quantityCells(
+  table: HTMLCanvasElement,
+  tableTsv: string | null | undefined
+): Array<{ gtin: string; image: HTMLCanvasElement }> {
+  return positionedWords(tableTsv)
+    .map((word) => ({ word, gtin: word.text.replace(/\D/g, "") }))
+    .filter(({ gtin }) => /^\d{12,14}$/.test(gtin))
+    .map(({ word, gtin }) => {
+      const sourceLeft = Math.round(table.width * 0.78);
+      const sourceWidth = Math.round(table.width * 0.22);
+      const sourceHeight = Math.round(table.width * 0.055);
+      const centerY = word.top + word.height / 2;
+      const sourceTop = Math.max(
+        0,
+        Math.min(table.height - sourceHeight, Math.round(centerY - sourceHeight / 2))
+      );
+      const image = document.createElement("canvas");
+      image.width = 700;
+      image.height = 220;
+      const context = image.getContext("2d");
+      if (!context) throw new Error("Nettleseren kunne ikke lese antallsfeltet.");
+      context.drawImage(
+        table,
+        sourceLeft,
+        sourceTop,
+        sourceWidth,
+        sourceHeight,
+        0,
+        0,
+        image.width,
+        image.height
+      );
+      return { gtin, image };
+    });
+}
+
+async function prepareForBrowserOcr(file: File): Promise<{
+  document: HTMLCanvasElement;
+  header: HTMLCanvasElement;
+  table: HTMLCanvasElement;
+}> {
   const url = URL.createObjectURL(file);
   try {
     const image = new Image();
@@ -217,7 +372,12 @@ async function prepareForBrowserOcr(file: File): Promise<HTMLCanvasElement> {
       pixels.data[index + 2] = enhanced;
     }
     context.putImageData(pixels, 0, 0);
-    return canvas;
+    const table = cropCanvas(canvas, 0.45, 0.54, 3000);
+    return {
+      document: canvas,
+      header: cropCanvas(canvas, 0.04, 0.43, 2200),
+      table
+    };
   } finally {
     URL.revokeObjectURL(url);
   }
@@ -283,8 +443,42 @@ export default function NewOrderPage() {
           preserve_interword_spaces: "1",
           user_defined_dpi: "300"
         });
-        const result = await worker.recognize(prepared);
-        scan = parseClickCollectText(result.data.text);
+        const documentResult = await worker.recognize(prepared.document);
+        setScanMessage("Leser kundeopplysningene …");
+        await worker.setParameters({ tessedit_pageseg_mode: PSM.SPARSE_TEXT });
+        const headerResult = await worker.recognize(prepared.header);
+        setScanMessage("Leser varetabellen og antall …");
+        const tableResult = await worker.recognize(prepared.table, {}, { tsv: true });
+        // Headeren settes først slik at en ren, målrettet kundelinje vinner over
+        // eventuell støy fra den store dokumentlesningen.
+        scan = parseClickCollectText(
+          `${headerResult.data.text}\n${documentResult.data.text}\n${tableResult.data.text}`
+        );
+        const tableDetails = spatialItemDetails(tableResult.data.tsv, prepared.table.width);
+        const quantities = new Map<string, number>();
+        await worker.setParameters({
+          tessedit_pageseg_mode: PSM.SINGLE_WORD,
+          tessedit_char_whitelist: "0123456789"
+        });
+        for (const cell of quantityCells(prepared.table, tableResult.data.tsv)) {
+          const cellResult = await worker.recognize(cell.image);
+          const value = Number(cellResult.data.text.replace(/\D/g, ""));
+          if (value > 0 && value <= 10000) quantities.set(cell.gtin, value);
+        }
+        scan.items = scan.items.map((item) => {
+          const detail = tableDetails.get(item.articleNumber);
+          const productText = `${item.description} ${item.model ?? ""}`;
+          const inferredUnit = /(?:skrue|festemiddel)/i.test(productText)
+            ? "Stk"
+            : /(?:virke|terrasseb|\bbord\b|trelast|\d+x\d+)/i.test(productText)
+              ? "Meter"
+              : undefined;
+          return {
+            ...item,
+            quantity: quantities.get(item.articleNumber) ?? detail?.quantity ?? item.quantity,
+            unit: detail?.unit ?? inferredUnit ?? item.unit
+          };
+        });
       } finally {
         await worker.terminate().catch(() => undefined);
       }
