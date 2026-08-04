@@ -3,6 +3,7 @@
 import Link from "next/link";
 import {
   ArrowLeft,
+  Camera,
   CheckCircle2,
   ClipboardPaste,
   FileText,

@@ -217,14 +217,19 @@ export function parseClickCollectText(text: string): ClickCollectScanResult {
   const rows = lines(text);
 
   const orderNumber = normalizeOrderNumber(
-    labelValue(rows, /(?:Ordrenr\.?|Ordrenummer)\s*[:.]?\s*(.*)$/i)
+    labelValue(rows, /(?:[OQ0]rd(?:re|ro)?nr\.?|Ordrenummer)\s*[:.;]?\s*(.*)$/i)
   );
   const customerName = labelValue(rows, /^Kunde\s*:\s*(.*)$/i);
-  const address = labelValue(rows, /^Adresse\s*:\s*(.*)$/i);
+  const address = labelValue(rows, /^Adresse\s*[:;]\s*(.*)$/i);
   const postal = labelValue(rows, /^Postnr\.?\s*:\s*(.*)$/i);
   const phone = normalizePhone(labelValue(rows, /^(?:Telefon|Mobiltelefon)\s*:\s*(.*)$/i));
   const email = labelValue(rows, /^E-?post\s*:\s*(.*)$/i);
-  const deliveryMethod = labelValue(rows, /^Leveransemetode\s*:?\s*(.*)$/i);
+  const craneDelivery = rows.find((row) => /\bKranbil\b/i.test(row));
+  const deliveryMethod = craneDelivery
+    ? /bakkeplan/i.test(craneDelivery)
+      ? craneDelivery
+      : 'Kranbil bakkeplan'
+    : labelValue(rows, /^Leveransemetode\s*:?\s*(.*)$/i);
 
   return {
     orderNumber,
