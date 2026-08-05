@@ -6,6 +6,7 @@ import {
   Camera,
   CheckCircle2,
   ClipboardPaste,
+  ExternalLink,
   FileText,
   FileUp,
   LoaderCircle,
@@ -32,6 +33,8 @@ type Line = {
   unit: string;
   model?: string;
   lookupStatus?: string;
+  productUrl?: string;
+  productImageUrl?: string;
 };
 
 type Fields = {
@@ -416,6 +419,7 @@ async function responseJson(response: Response): Promise<Record<string, unknown>
 async function lookupProductByEan(ean: string): Promise<{
   name: string;
   productUrl: string;
+  imageUrl: string;
 } | null> {
   const response = await fetch(`/api/products/lookup?ean=${encodeURIComponent(ean)}`, {
     cache: "no-store"
@@ -423,11 +427,15 @@ async function lookupProductByEan(ean: string): Promise<{
   const result = await responseJson(response);
   if (!response.ok) throw new Error(String(result.error ?? "Vareoppslaget feilet."));
   const product = result.product as
-    | { name?: string; productUrl?: string }
+    | { name?: string; productUrl?: string; imageUrl?: string }
     | null
     | undefined;
   if (!product?.name) return null;
-  return { name: product.name, productUrl: product.productUrl ?? "" };
+  return {
+    name: product.name,
+    productUrl: product.productUrl ?? "",
+    imageUrl: product.imageUrl ?? ""
+  };
 }
 
 export default function NewOrderPage() {
@@ -548,7 +556,14 @@ export default function NewOrderPage() {
             try {
               const product = await lookupProductByEan(line.articleNumber);
               return product
-                ? { ...line, description: product.name, lookupStatus: "Vare funnet på nett" }
+                ? {
+                    ...line,
+                    description: product.name,
+                    model: undefined,
+                    productUrl: product.productUrl,
+                    productImageUrl: product.imageUrl,
+                    lookupStatus: "Varedata hentet fra nett"
+                  }
                 : { ...line, lookupStatus: "Fant ikke varen på nett" };
             } catch {
               return { ...line, lookupStatus: "Nettoppslag feilet" };
@@ -655,7 +670,13 @@ export default function NewOrderPage() {
       updateLine(
         index,
         product
-          ? { description: product.name, lookupStatus: "Vare funnet på nett" }
+          ? {
+              description: product.name,
+              model: undefined,
+              productUrl: product.productUrl,
+              productImageUrl: product.imageUrl,
+              lookupStatus: "Varedata hentet fra nett"
+            }
           : { lookupStatus: "Fant ikke varen på nett" }
       );
     } catch (lookupError) {
@@ -947,6 +968,21 @@ export default function NewOrderPage() {
                     />
                     {line.model && (
                       <small>Modell: {line.model}</small>
+                    )}
+                    {(line.productImageUrl || line.productUrl) && (
+                      <div className="product-match-preview">
+                        {line.productImageUrl && (
+                          <img
+                            src={`/api/product-image?url=${encodeURIComponent(line.productImageUrl)}`}
+                            alt={line.description}
+                          />
+                        )}
+                        {line.productUrl && (
+                          <a href={line.productUrl} target="_blank" rel="noreferrer">
+                            Åpne varen <ExternalLink size={13} />
+                          </a>
+                        )}
+                      </div>
                     )}
                     <div className="product-lookup-row">
                       <button
