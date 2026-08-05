@@ -19,7 +19,7 @@ export type EnrichedOrderItem = ParsedOrderItem & {
   productLookupAt: string;
 };
 
-type ProductInfo = {
+export type ProductInfo = {
   name: string;
   productUrl: string;
   imageUrl: string | null;
@@ -294,7 +294,7 @@ async function validateCandidates(
   return null;
 }
 
-async function lookupProduct(ean: string): Promise<ProductInfo | null> {
+export async function lookupProduct(ean: string): Promise<ProductInfo | null> {
   // 1. Obs BYGG's own search. It can be client-rendered, so several parameter
   // variants are tried and embedded links are extracted.
   const obsSearchUrls = [

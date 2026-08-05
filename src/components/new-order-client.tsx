@@ -11,6 +11,7 @@ import {
   LoaderCircle,
   Plus,
   ScanLine,
+  Search,
   Trash2
 } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -30,6 +31,7 @@ type Line = {
   quantity: string;
   unit: string;
   model?: string;
+  lookupStatus?: string;
 };
 
 type Fields = {
@@ -411,6 +413,23 @@ async function responseJson(response: Response): Promise<Record<string, unknown>
   }
 }
 
+async function lookupProductByEan(ean: string): Promise<{
+  name: string;
+  productUrl: string;
+} | null> {
+  const response = await fetch(`/api/products/lookup?ean=${encodeURIComponent(ean)}`, {
+    cache: "no-store"
+  });
+  const result = await responseJson(response);
+  if (!response.ok) throw new Error(String(result.error ?? "Vareoppslaget feilet."));
+  const product = result.product as
+    | { name?: string; productUrl?: string }
+    | null
+    | undefined;
+  if (!product?.name) return null;
+  return { name: product.name, productUrl: product.productUrl ?? "" };
+}
+
 export default function NewOrderPage() {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -425,6 +444,7 @@ export default function NewOrderPage() {
   const [scanning, setScanning] = useState(false);
   const [scanMessage, setScanMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [lookingUpLines, setLookingUpLines] = useState<Set<number>>(new Set());
 
   const click = mode === "CLICK_AND_COLLECT";
 
@@ -514,15 +534,34 @@ export default function NewOrderPage() {
       }));
 
       if (scan.items && scan.items.length > 0) {
-        setLines(
-          scan.items.map((item) => ({
-            articleNumber: item.articleNumber ?? "",
-            description: item.description ?? item.model ?? "",
-            model: item.model ?? "",
-            quantity: String(item.quantity ?? 1),
-            unit: item.unit ?? "Stk"
-          }))
-        );
+        const scannedLines: Line[] = scan.items.map((item) => ({
+          articleNumber: item.articleNumber ?? "",
+          description: item.description ?? item.model ?? "",
+          model: item.model ?? "",
+          quantity: String(item.quantity ?? 1),
+          unit: item.unit ?? "Stk",
+          lookupStatus: "Henter varenavn fra nettet …"
+        }));
+        setLines(scannedLines);
+        void Promise.all(
+          scannedLines.map(async (line) => {
+            try {
+              const product = await lookupProductByEan(line.articleNumber);
+              return product
+                ? { ...line, description: product.name, lookupStatus: "Vare funnet på nett" }
+                : { ...line, lookupStatus: "Fant ikke varen på nett" };
+            } catch {
+              return { ...line, lookupStatus: "Nettoppslag feilet" };
+            }
+          })
+        ).then((enrichedLines) => {
+          const byEan = new Map(
+            enrichedLines.map((line) => [line.articleNumber, line])
+          );
+          setLines((current) =>
+            current.map((line) => byEan.get(line.articleNumber) ?? line)
+          );
+        });
       }
 
       const foundItems = scan.items?.length ?? 0;
@@ -600,6 +639,37 @@ export default function NewOrderPage() {
         lineIndex === index ? { ...line, ...patch } : line
       )
     );
+  }
+
+  async function lookupLine(index: number) {
+    const ean = lines[index]?.articleNumber.replace(/\D/g, "") ?? "";
+    if (!/^\d{12,14}$/.test(ean)) {
+      updateLine(index, { lookupStatus: "Skriv inn 12–14 EAN-sifre først" });
+      return;
+    }
+
+    setLookingUpLines((current) => new Set(current).add(index));
+    updateLine(index, { lookupStatus: "Søker på nettet …" });
+    try {
+      const product = await lookupProductByEan(ean);
+      updateLine(
+        index,
+        product
+          ? { description: product.name, lookupStatus: "Vare funnet på nett" }
+          : { lookupStatus: "Fant ikke varen på nett" }
+      );
+    } catch (lookupError) {
+      updateLine(index, {
+        lookupStatus:
+          lookupError instanceof Error ? lookupError.message : "Vareoppslaget feilet"
+      });
+    } finally {
+      setLookingUpLines((current) => {
+        const next = new Set(current);
+        next.delete(index);
+        return next;
+      });
+    }
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -878,6 +948,22 @@ export default function NewOrderPage() {
                     {line.model && (
                       <small>Modell: {line.model}</small>
                     )}
+                    <div className="product-lookup-row">
+                      <button
+                        type="button"
+                        className="product-lookup-button"
+                        disabled={lookingUpLines.has(index) || !line.articleNumber.trim()}
+                        onClick={() => void lookupLine(index)}
+                      >
+                        {lookingUpLines.has(index) ? (
+                          <LoaderCircle size={14} className="spin" />
+                        ) : (
+                          <Search size={14} />
+                        )}
+                        Hent vare fra nett
+                      </button>
+                      {line.lookupStatus && <small>{line.lookupStatus}</small>}
+                    </div>
                   </div>
                   <input
                     placeholder="Antall"
