@@ -30,7 +30,7 @@ type Order = {
   placement?: string | null;
   locationCode?: string | null;
   comment?: string | null;
-  fulfillmentMethod?: "THIS_THURSDAY" | "NEXT_THURSDAY" | "OWN_VEHICLE" | null;
+  fulfillmentMethod?: "THIS_THURSDAY" | "NEXT_THURSDAY" | "OWN_VEHICLE" | "ALREADY_BOOKED" | null;
   transportType?: "STANDARD_CRANE_GROUND" | "LARGE_CRANE" | "VAN" | null;
   transportComment?: string | null;
   pickupDate?: string | null;
@@ -193,7 +193,7 @@ export function AdminOrderEditor({
         <label>Lokasjonskode<input value={draft.locationCode || ""} onChange={(e)=>field("locationCode",e.target.value)} /></label>
         <label>Hente-/utkjøringsdato<input type="date" value={draft.pickupDate || ""} onChange={(e)=>field("pickupDate",e.target.value)} /></label>
         <label>Leveringsmåte<select value={draft.fulfillmentMethod || ""} onChange={(e)=>field("fulfillmentMethod",(e.target.value || null) as Order["fulfillmentMethod"])}>
-          <option value="">Ikke valgt</option><option value="THIS_THURSDAY">Torsdag inneværende uke</option><option value="NEXT_THURSDAY">Torsdag neste uke</option><option value="OWN_VEHICLE">Egen bil</option>
+          <option value="">Ikke valgt</option><option value="THIS_THURSDAY">Torsdag inneværende uke</option><option value="NEXT_THURSDAY">Torsdag neste uke</option><option value="OWN_VEHICLE">Egen bil</option><option value="ALREADY_BOOKED">Frakt allerede bestilt – ikke send e-post</option>
         </select></label>
         <label>Transporttype<select value={draft.transportType || "STANDARD_CRANE_GROUND"} onChange={(e)=>field("transportType",e.target.value as Order["transportType"])}><option value="STANDARD_CRANE_GROUND">Standard kranbil til bakkeplan</option><option value="LARGE_CRANE">Kranbil stor</option><option value="VAN">Varebil</option></select></label><label className="full">Kommentar til transportør<textarea rows={3} value={draft.transportComment || ""} onChange={(e)=>field("transportComment",e.target.value)} /></label>
         <label className="full">Kommentar<textarea rows={3} value={draft.comment || ""} onChange={(e)=>field("comment",e.target.value)} /></label>

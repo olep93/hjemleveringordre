@@ -65,7 +65,7 @@ type Order = {
   status: string;
   placement?: string | null;
   locationCode?: string | null;
-  fulfillmentMethod?: "THIS_THURSDAY" | "NEXT_THURSDAY" | "OWN_VEHICLE" | null;
+  fulfillmentMethod?: "THIS_THURSDAY" | "NEXT_THURSDAY" | "OWN_VEHICLE" | "ALREADY_BOOKED" | null;
   transportType?: "STANDARD_CRANE_GROUND" | "LARGE_CRANE" | "VAN" | null;
   transportComment?: string | null;
   pickupDate?: string | null;
@@ -144,7 +144,7 @@ export default function OrderPage({
   const [deliveryDate, setDeliveryDate] = useState("");
   const [locationCode, setLocationCode] = useState("");
   const [showFulfillment, setShowFulfillment] = useState(false);
-  const [fulfillmentMethod, setFulfillmentMethod] = useState<"THIS_THURSDAY" | "NEXT_THURSDAY" | "OWN_VEHICLE">("THIS_THURSDAY");
+  const [fulfillmentMethod, setFulfillmentMethod] = useState<"THIS_THURSDAY" | "NEXT_THURSDAY" | "OWN_VEHICLE" | "ALREADY_BOOKED">("THIS_THURSDAY");
   const [pickupDate, setPickupDate] = useState("");
   const [pickupRecipientEmail, setPickupRecipientEmail] = useState("");
   const [transportType, setTransportType] = useState<"STANDARD_CRANE_GROUND" | "LARGE_CRANE" | "VAN">("STANDARD_CRANE_GROUND");
@@ -1116,7 +1116,8 @@ export default function OrderPage({
         {(order.photos ?? []).length > 0 && <section className="modern-card history-card-spacing"><div className="modern-card-title"><span className="title-icon"><Camera size={21}/></span><h2>Bilder av ferdig plukket ordre</h2></div><div className="photo-grid persisted-picking-photos">{(order.photos??[]).map((photo,index)=>photo.url?<figure key={index}><a href={photo.url} target="_blank"><img src={photo.url} alt="Plukkebilde"/></a><figcaption>{photo.uploadedBy??"Ukjent"}</figcaption></figure>:null)}</div></section>}
         {!pickingMode &&
           order.status === "READY_FOR_LOADING" &&
-          order.source !== "CLICK_AND_COLLECT" && (
+          order.source !== "CLICK_AND_COLLECT" &&
+          order.fulfillmentMethod !== "ALREADY_BOOKED" && (
             <section className="modern-card history-card-spacing outlook-handoff-card">
               <div>
                 <p className="eyebrow">TRANSPORTØR</p>
@@ -1163,7 +1164,27 @@ export default function OrderPage({
             ))}
           </div>
         </section>
-        {showFulfillment && <div className="modal-backdrop"><div className="fulfillment-modal"><div className="modal-heading"><div><p className="eyebrow">SISTE STEG</p><h2>Velg utkjøring eller henting</h2></div><button type="button" onClick={()=>setShowFulfillment(false)}><X size={20}/></button></div><div className="fulfillment-options"><button type="button" className={fulfillmentMethod==="THIS_THURSDAY"?"selected":""} onClick={()=>{setFulfillmentMethod("THIS_THURSDAY");setPickupDate(thursday(0))}}><Truck size={20}/><strong>Torsdag inneværende uke</strong><span>{thursday(0)}</span></button><button type="button" className={fulfillmentMethod==="NEXT_THURSDAY"?"selected":""} onClick={()=>{setFulfillmentMethod("NEXT_THURSDAY");setPickupDate(thursday(1))}}><Truck size={20}/><strong>Torsdag neste uke</strong><span>{thursday(1)}</span></button><button type="button" className={fulfillmentMethod==="OWN_VEHICLE"?"selected":""} onClick={()=>setFulfillmentMethod("OWN_VEHICLE")}><Box size={20}/><strong>Egen bil</strong><span>Velg egen dato</span></button></div><label>Dato<input type="date" value={pickupDate} onChange={e=>setPickupDate(e.target.value)}/></label><label>Type transport<select value={transportType} onChange={e=>setTransportType(e.target.value as "STANDARD_CRANE_GROUND"|"LARGE_CRANE"|"VAN")}><option value="STANDARD_CRANE_GROUND">Standard kranbil til bakkeplan</option><option value="LARGE_CRANE">Kranbil stor</option><option value="VAN">Varebil</option></select></label><div className="transport-warning">{transportType==="LARGE_CRANE"?"NB: Dette påløper ekstrakostnad utenfor standard leveringsvilkår, kontakt transportøren direkte for priser.":transportType==="VAN"?"NB: Innbæring må eventuelt avtales direkte med transportøren. Dette er kun levering med varebil":"NB: Standard levering leveres normalt kun til bakkeplan og løftes rett av bil. For andre avtaler må transportør kontaktes."}</div><details className="transport-comment-box"><summary>Kommentar til transportør</summary><label>Kommentar til transportør<textarea rows={4} value={transportComment} placeholder="Skriv inn forespørsler eller viktig informasjon til transportøren..." onChange={e=>setTransportComment(e.target.value)}/></label></details><div className="modal-actions"><button className="outline-action" type="button" onClick={()=>setShowFulfillment(false)}>Tilbake</button><button className="green-action" type="button" disabled={saving||!pickupDate} onClick={()=>void savePicking(true)}><CheckCircle2 size={18}/>Ferdigstill ordre</button></div></div></div>}
+        {showFulfillment && (
+          <div className="modal-backdrop">
+            <div className="fulfillment-modal" role="dialog" aria-modal="true" aria-labelledby="fulfillment-title">
+              <div className="modal-heading">
+                <div><p className="eyebrow">SISTE STEG</p><h2 id="fulfillment-title">Velg utkjøring eller henting</h2></div>
+                <button type="button" aria-label="Lukk" onClick={() => setShowFulfillment(false)}><X size={20}/></button>
+              </div>
+              <div className="fulfillment-options">
+                <button type="button" className={fulfillmentMethod === "THIS_THURSDAY" ? "selected" : ""} onClick={() => { setFulfillmentMethod("THIS_THURSDAY"); setPickupDate(thursday(0)); }}><Truck size={20}/><strong>Torsdag inneværende uke</strong><span>{thursday(0)}</span></button>
+                <button type="button" className={fulfillmentMethod === "NEXT_THURSDAY" ? "selected" : ""} onClick={() => { setFulfillmentMethod("NEXT_THURSDAY"); setPickupDate(thursday(1)); }}><Truck size={20}/><strong>Torsdag neste uke</strong><span>{thursday(1)}</span></button>
+                <button type="button" className={fulfillmentMethod === "OWN_VEHICLE" ? "selected" : ""} onClick={() => setFulfillmentMethod("OWN_VEHICLE")}><Box size={20}/><strong>Egen bil</strong><span>Velg egen dato</span></button>
+                <button type="button" className={fulfillmentMethod === "ALREADY_BOOKED" ? "selected" : ""} onClick={() => setFulfillmentMethod("ALREADY_BOOKED")}><CheckCircle2 size={20}/><strong>Jeg har bestilt frakt allerede</strong><span>Ikke send e-post</span></button>
+              </div>
+              <label>Dato<input type="date" value={pickupDate} onChange={e => setPickupDate(e.target.value)}/></label>
+              <label>Type transport<select value={transportType} onChange={e => setTransportType(e.target.value as "STANDARD_CRANE_GROUND" | "LARGE_CRANE" | "VAN")}><option value="STANDARD_CRANE_GROUND">Standard kranbil til bakkeplan</option><option value="LARGE_CRANE">Kranbil stor</option><option value="VAN">Varebil</option></select></label>
+              <div className="transport-warning">{fulfillmentMethod === "ALREADY_BOOKED" ? "Frakten er allerede bestilt. Ordren ferdigstilles uten mulighet for å sende transportør-e-post fra ordresiden." : transportType === "LARGE_CRANE" ? "NB: Dette påløper ekstrakostnad utenfor standard leveringsvilkår, kontakt transportøren direkte for priser." : transportType === "VAN" ? "NB: Innbæring må eventuelt avtales direkte med transportøren. Dette er kun levering med varebil" : "NB: Standard levering leveres normalt kun til bakkeplan og løftes rett av bil. For andre avtaler må transportør kontaktes."}</div>
+              <details className="transport-comment-box"><summary>Kommentar til transportør</summary><label>Kommentar til transportør<textarea rows={4} value={transportComment} placeholder="Skriv inn forespørsler eller viktig informasjon til transportøren..." onChange={e => setTransportComment(e.target.value)}/></label></details>
+              <div className="modal-actions"><button className="outline-action" type="button" onClick={() => setShowFulfillment(false)}>Tilbake</button><button className="green-action" type="button" disabled={saving || !pickupDate} onClick={() => void savePicking(true)}><CheckCircle2 size={18}/>Ferdigstill ordre</button></div>
+            </div>
+          </div>
+        )}
       </section>
     </main>
   );

@@ -19,6 +19,7 @@ type BlobReference = {
 type WaypointOrder = {
   title?: string | null;
   source?: string | null;
+  fulfillmentMethod?: string | null;
   pickupRecipientEmail?: string | null;
   originalDocumentBlob?: BlobReference | null;
   photos?: BlobReference[];
@@ -69,6 +70,12 @@ export async function POST(
       return NextResponse.json(
         { error: "Klikk & Hent-ordre skal ikke sendes til transportør." },
         { status: 400 }
+      );
+    }
+    if (order.fulfillmentMethod === "ALREADY_BOOKED") {
+      return NextResponse.json(
+        { error: "Frakten er allerede bestilt. Det skal ikke sendes e-post til transportør." },
+        { status: 409 }
       );
     }
 

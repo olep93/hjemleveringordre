@@ -193,7 +193,7 @@ export async function PATCH(
       phone?: string | null;
       itemChecks?: Array<{ id: string; checked: boolean }>;
       pickingSessionEnded?: boolean;
-      fulfillmentMethod?: "THIS_THURSDAY" | "NEXT_THURSDAY" | "OWN_VEHICLE";
+      fulfillmentMethod?: "THIS_THURSDAY" | "NEXT_THURSDAY" | "OWN_VEHICLE" | "ALREADY_BOOKED";
       transportType?: "STANDARD_CRANE_GROUND" | "LARGE_CRANE" | "VAN";
       transportComment?: string | null;
       pickupDate?: string | null;
@@ -210,7 +210,7 @@ export async function PATCH(
         placement?: string | null;
         locationCode?: string | null;
         comment?: string | null;
-        fulfillmentMethod?: "THIS_THURSDAY" | "NEXT_THURSDAY" | "OWN_VEHICLE" | null;
+        fulfillmentMethod?: "THIS_THURSDAY" | "NEXT_THURSDAY" | "OWN_VEHICLE" | "ALREADY_BOOKED" | null;
         transportType?: "STANDARD_CRANE_GROUND" | "LARGE_CRANE" | "VAN" | null;
         transportComment?: string | null;
         pickupDate?: string | null;

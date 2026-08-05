@@ -1871,3 +1871,59 @@ html, body {
   padding: 10px;
   resize: vertical;
 }
+
+/* Fraktvalg: dialogen skal alltid kunne brukes på små mobilskjermer. */
+.modal-backdrop {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.fulfillment-modal {
+  max-height: calc(100dvh - 36px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.fulfillment-options {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (max-width: 760px) {
+  .modal-backdrop {
+    align-items: start;
+    padding: 8px;
+  }
+
+  .fulfillment-modal {
+    width: 100%;
+    max-height: calc(100dvh - 16px);
+    margin: auto 0;
+    padding: 16px;
+    border-radius: 15px;
+  }
+
+  .fulfillment-options {
+    grid-template-columns: 1fr;
+    margin: 14px 0;
+  }
+
+  .fulfillment-options button {
+    min-height: 82px;
+  }
+
+  .modal-actions {
+    position: sticky;
+    bottom: -16px;
+    z-index: 2;
+    flex-direction: column-reverse;
+    padding: 12px 0 2px;
+    background: white;
+  }
+
+  .modal-actions button {
+    width: 100%;
+    min-height: 48px;
+    justify-content: center;
+  }
+}
