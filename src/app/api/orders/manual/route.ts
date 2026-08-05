@@ -7,6 +7,11 @@ import { getSuggestedDeliveryDate } from "@/lib/orders/delivery-date";
 import { uploadPrivateBlob } from "@/lib/blob-storage";
 import { enrichOrderItems } from "@/lib/orders/enrich-products";
 import type { ParsedOrderItem } from "@/lib/orders/parse-order-pdf";
+import {
+  escapeHtml,
+  formatOrderItemsHtml,
+  sendOrderNotification
+} from "@/lib/notifications";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -154,7 +159,56 @@ export async function POST(request: NextRequest) {
       createdAt: FieldValue.serverTimestamp()
     });
 
-    return NextResponse.json({ ok: true, id: orderRef.id });
+    let notification: { sent: number; error?: string } | null = null;
+
+    if (source === "CLICK_AND_COLLECT") {
+      try {
+        notification = await sendOrderNotification({
+          event: "NEW_ORDER",
+          subject: `Ny Klikk & Hent-ordre: ${title}`,
+          html: `
+            <div style="font-family:Arial,sans-serif;color:#071a3a;max-width:680px;">
+              <h2 style="color:#002b67;">${escapeHtml(title)}</h2>
+              <p>En ny Klikk &amp; Hent-ordre er registrert av <strong>${escapeHtml(createdBy)}</strong>.</p>
+              <p>
+                Hentedato: <strong>${deliveryDate}</strong><br/>
+                Kunde: <strong>${escapeHtml(customerName ?? "Ikke registrert")}</strong><br/>
+                Antall varelinjer: <strong>${enrichedItems.length}</strong>
+              </p>
+              <h3 style="margin-bottom:6px;">Dette skal plukkes</h3>
+              ${formatOrderItemsHtml(enrichedItems)}
+            </div>
+          `
+        });
+      } catch (notificationError) {
+        notification = {
+          sent: 0,
+          error:
+            notificationError instanceof Error
+              ? notificationError.message
+              : "Ukjent feil ved e-postutsending."
+        };
+      }
+
+      await orderRef.collection("events").add({
+        type: notification.error
+          ? "NEW_ORDER_NOTIFICATION_FAILED"
+          : "NEW_ORDER_NOTIFICATION_SENT",
+        description: notification.error
+          ? `Ordren ble opprettet, men e-postvarslingen feilet: ${notification.error}`
+          : notification.sent > 0
+            ? `Varsel om ny Klikk & Hent-ordre ble sendt til ${notification.sent} mottaker(e).`
+            : "Ordren ble opprettet, men ingen aktive mottakere var konfigurert for varsel om ny ordre.",
+        actorType: "SYSTEM",
+        createdAt: FieldValue.serverTimestamp()
+      });
+    }
+
+    return NextResponse.json({
+      ok: true,
+      id: orderRef.id,
+      notification
+    });
   } catch (error) {
     return NextResponse.json(
       {

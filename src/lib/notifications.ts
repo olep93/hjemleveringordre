@@ -23,7 +23,7 @@ const fromAddress =
   process.env.NOTIFICATION_FROM_EMAIL ||
   "Hjemleveringordre <varsling@hjemlevering.jobbverktoy.no>";
 
-function escapeHtml(value: unknown): string {
+export function escapeHtml(value: unknown): string {
   return String(value ?? "")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
