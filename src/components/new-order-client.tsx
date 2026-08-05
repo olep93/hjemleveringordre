@@ -192,6 +192,27 @@ function cropCanvas(
   return canvas;
 }
 
+function cropGtinColumn(table: HTMLCanvasElement): HTMLCanvasElement {
+  const sourceWidth = Math.round(table.width * 0.34);
+  const canvas = document.createElement("canvas");
+  canvas.width = 1800;
+  canvas.height = Math.max(1, Math.round((table.height * canvas.width) / sourceWidth));
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("Nettleseren kunne ikke lese GTIN-kolonnen.");
+  context.drawImage(
+    table,
+    0,
+    0,
+    sourceWidth,
+    table.height,
+    0,
+    0,
+    canvas.width,
+    canvas.height
+  );
+  return canvas;
+}
+
 type PositionedWord = {
   left: number;
   top: number;
@@ -199,6 +220,15 @@ type PositionedWord = {
   height: number;
   text: string;
 };
+
+// Mobilbildet er tatt litt nedenfra og fra venstre. En fysisk tabellrad stiger
+// derfor mot høyre i det normaliserte bildet, i stedet for å være vannrett.
+const TABLE_ROW_SLOPE = -0.035;
+
+function projectedRowY(anchor: PositionedWord, targetX: number): number {
+  const anchorX = anchor.left + anchor.width / 2;
+  return anchor.top + anchor.height / 2 + (targetX - anchorX) * TABLE_ROW_SLOPE;
+}
 
 function positionedWords(tsv?: string | null): PositionedWord[] {
   if (!tsv) return [];
@@ -227,15 +257,20 @@ function spatialItemDetails(
   const quantityHeader = words.find(
     (word) => word.text.toLowerCase().replace(/[^a-z]/g, "") === "antall"
   );
+  const unitHeader = words.find(
+    (word) => word.text.toLowerCase().replace(/[^a-z]/g, "") === "enhet"
+  );
 
   for (const gtinWord of words) {
     const gtin = gtinWord.text.replace(/\D/g, "");
     if (!/^\d{12,14}$/.test(gtin)) continue;
-    const centerY = gtinWord.top + gtinWord.height / 2;
     const rowWords = words.filter(
       (word) =>
         word.left > gtinWord.left + imageWidth * 0.42 &&
-        Math.abs(word.top + word.height / 2 - centerY) <= imageWidth * 0.045
+        Math.abs(
+          word.top + word.height / 2 -
+            projectedRowY(gtinWord, word.left + word.width / 2)
+        ) <= imageWidth * 0.025
     );
     const quantityWord = rowWords
       .filter((word) =>
@@ -252,10 +287,19 @@ function spatialItemDetails(
       .filter(({ match }) => match)
       .sort(
         (a, b) =>
-          Math.abs(a.word.top + a.word.height / 2 - centerY) -
-          Math.abs(b.word.top + b.word.height / 2 - centerY)
+          Math.abs(
+            a.word.top + a.word.height / 2 -
+              projectedRowY(gtinWord, a.word.left + a.word.width / 2)
+          ) -
+          Math.abs(
+            b.word.top + b.word.height / 2 -
+              projectedRowY(gtinWord, b.word.left + b.word.width / 2)
+          )
       )[0];
     const unitWord = rowWords
+      .filter((word) =>
+        unitHeader ? word.left >= unitHeader.left - imageWidth * 0.02 : true
+      )
       .map((word) => ({
         word,
         normalized: word.text.toLowerCase().replace(/[^a-zæøå]/g, "")
@@ -265,8 +309,14 @@ function spatialItemDetails(
       )
       .sort(
         (a, b) =>
-          Math.abs(a.word.top + a.word.height / 2 - centerY) -
-          Math.abs(b.word.top + b.word.height / 2 - centerY)
+          Math.abs(
+            a.word.top + a.word.height / 2 -
+              projectedRowY(gtinWord, a.word.left + a.word.width / 2)
+          ) -
+          Math.abs(
+            b.word.top + b.word.height / 2 -
+              projectedRowY(gtinWord, b.word.left + b.word.width / 2)
+          )
       )[0];
     const parsedQuantity = quantityWord?.match?.[1]
       ? Number(quantityWord.match[1].replace(",", "."))
@@ -290,46 +340,11 @@ function spatialItemDetails(
   return details;
 }
 
-function quantityCells(
-  table: HTMLCanvasElement,
-  tableTsv: string | null | undefined
-): Array<{ gtin: string; image: HTMLCanvasElement }> {
-  return positionedWords(tableTsv)
-    .map((word) => ({ word, gtin: word.text.replace(/\D/g, "") }))
-    .filter(({ gtin }) => /^\d{12,14}$/.test(gtin))
-    .map(({ word, gtin }) => {
-      const sourceLeft = Math.round(table.width * 0.78);
-      const sourceWidth = Math.round(table.width * 0.22);
-      const sourceHeight = Math.round(table.width * 0.055);
-      const centerY = word.top + word.height / 2;
-      const sourceTop = Math.max(
-        0,
-        Math.min(table.height - sourceHeight, Math.round(centerY - sourceHeight / 2))
-      );
-      const image = document.createElement("canvas");
-      image.width = 700;
-      image.height = 220;
-      const context = image.getContext("2d");
-      if (!context) throw new Error("Nettleseren kunne ikke lese antallsfeltet.");
-      context.drawImage(
-        table,
-        sourceLeft,
-        sourceTop,
-        sourceWidth,
-        sourceHeight,
-        0,
-        0,
-        image.width,
-        image.height
-      );
-      return { gtin, image };
-    });
-}
-
 async function prepareForBrowserOcr(file: File): Promise<{
   document: HTMLCanvasElement;
   header: HTMLCanvasElement;
   table: HTMLCanvasElement;
+  gtins: HTMLCanvasElement;
 }> {
   const url = URL.createObjectURL(file);
   try {
@@ -376,7 +391,8 @@ async function prepareForBrowserOcr(file: File): Promise<{
     return {
       document: canvas,
       header: cropCanvas(canvas, 0.04, 0.43, 2200),
-      table
+      table,
+      gtins: cropGtinColumn(table)
     };
   } finally {
     URL.revokeObjectURL(url);
@@ -449,22 +465,28 @@ export default function NewOrderPage() {
         const headerResult = await worker.recognize(prepared.header);
         setScanMessage("Leser varetabellen og antall …");
         const tableResult = await worker.recognize(prepared.table, {}, { tsv: true });
+        setScanMessage("Kontrollerer GTIN-kolonnen …");
+        await worker.setParameters({
+          tessedit_pageseg_mode: PSM.SPARSE_TEXT,
+          tessedit_char_whitelist: "0123456789"
+        });
+        const gtinResult = await worker.recognize(prepared.gtins);
+        await worker.setParameters({ tessedit_pageseg_mode: PSM.SINGLE_COLUMN });
+        const gtinColumnResult = await worker.recognize(prepared.gtins);
         // Headeren settes først slik at en ren, målrettet kundelinje vinner over
         // eventuell støy fra den store dokumentlesningen.
         scan = parseClickCollectText(
           `${headerResult.data.text}\n${documentResult.data.text}\n${tableResult.data.text}`
         );
-        const tableDetails = spatialItemDetails(tableResult.data.tsv, prepared.table.width);
-        const quantities = new Map<string, number>();
-        await worker.setParameters({
-          tessedit_pageseg_mode: PSM.SINGLE_WORD,
-          tessedit_char_whitelist: "0123456789"
-        });
-        for (const cell of quantityCells(prepared.table, tableResult.data.tsv)) {
-          const cellResult = await worker.recognize(cell.image);
-          const value = Number(cellResult.data.text.replace(/\D/g, ""));
-          if (value > 0 && value <= 10000) quantities.set(cell.gtin, value);
+        const gtinScan = parseClickCollectText(
+          `${gtinResult.data.text}\n${gtinColumnResult.data.text}`
+        );
+        for (const gtinItem of gtinScan.items) {
+          if (!scan.items.some((item) => item.articleNumber === gtinItem.articleNumber)) {
+            scan.items.push(gtinItem);
+          }
         }
+        const tableDetails = spatialItemDetails(tableResult.data.tsv, prepared.table.width);
         scan.items = scan.items.map((item) => {
           const detail = tableDetails.get(item.articleNumber);
           const productText = `${item.description} ${item.model ?? ""}`;
@@ -475,7 +497,7 @@ export default function NewOrderPage() {
               : undefined;
           return {
             ...item,
-            quantity: quantities.get(item.articleNumber) ?? detail?.quantity ?? item.quantity,
+            quantity: detail?.quantity ?? item.quantity,
             unit: detail?.unit ?? inferredUnit ?? item.unit
           };
         });
