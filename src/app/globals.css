@@ -1889,6 +1889,10 @@ html, body {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.fulfillment-error {
+  margin: 0 0 14px;
+}
+
 @media (max-width: 760px) {
   .modal-backdrop {
     align-items: start;

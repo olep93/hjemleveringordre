@@ -352,7 +352,10 @@ export default function OrderPage({
 
   function inputDate(date: Date) { return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`; }
   function thursday(weeks:number){const t=new Date();const monday=(t.getDay()+6)%7;const d=new Date(t);d.setDate(t.getDate()-monday+3+weeks*7);return inputDate(d)}
-  function beginFinalize(){if(!validateBeforeFinalize())return;setPickupDate(fulfillmentMethod==="NEXT_THURSDAY"?thursday(1):fulfillmentMethod==="THIS_THURSDAY"?thursday(0):pickupDate);setShowFulfillment(true)}
+  function bookedDate() {
+    return pickupDate || deliveryDate || inputDate(new Date());
+  }
+  function beginFinalize(){if(!validateBeforeFinalize())return;setPickupDate(fulfillmentMethod==="NEXT_THURSDAY"?thursday(1):fulfillmentMethod==="THIS_THURSDAY"?thursday(0):fulfillmentMethod==="ALREADY_BOOKED"?bookedDate():pickupDate);setShowFulfillment(true)}
   function openOutlookTemplate(current: Order) {
     if (current.source === "CLICK_AND_COLLECT") return;
     const to = current.pickupRecipientEmail || pickupRecipientEmail.trim();
@@ -1175,8 +1178,9 @@ export default function OrderPage({
                 <button type="button" className={fulfillmentMethod === "THIS_THURSDAY" ? "selected" : ""} onClick={() => { setFulfillmentMethod("THIS_THURSDAY"); setPickupDate(thursday(0)); }}><Truck size={20}/><strong>Torsdag inneværende uke</strong><span>{thursday(0)}</span></button>
                 <button type="button" className={fulfillmentMethod === "NEXT_THURSDAY" ? "selected" : ""} onClick={() => { setFulfillmentMethod("NEXT_THURSDAY"); setPickupDate(thursday(1)); }}><Truck size={20}/><strong>Torsdag neste uke</strong><span>{thursday(1)}</span></button>
                 <button type="button" className={fulfillmentMethod === "OWN_VEHICLE" ? "selected" : ""} onClick={() => setFulfillmentMethod("OWN_VEHICLE")}><Box size={20}/><strong>Egen bil</strong><span>Velg egen dato</span></button>
-                <button type="button" className={fulfillmentMethod === "ALREADY_BOOKED" ? "selected" : ""} onClick={() => setFulfillmentMethod("ALREADY_BOOKED")}><CheckCircle2 size={20}/><strong>Jeg har bestilt frakt allerede</strong><span>Ikke send e-post</span></button>
+                <button type="button" className={fulfillmentMethod === "ALREADY_BOOKED" ? "selected" : ""} onClick={() => { setFulfillmentMethod("ALREADY_BOOKED"); setPickupDate(bookedDate()); }}><CheckCircle2 size={20}/><strong>Jeg har bestilt frakt allerede</strong><span>Ikke send e-post</span></button>
               </div>
+              {validationMessage && <div className="error-box fulfillment-error" role="alert">{validationMessage}</div>}
               <label>Dato<input type="date" value={pickupDate} onChange={e => setPickupDate(e.target.value)}/></label>
               <label>Type transport<select value={transportType} onChange={e => setTransportType(e.target.value as "STANDARD_CRANE_GROUND" | "LARGE_CRANE" | "VAN")}><option value="STANDARD_CRANE_GROUND">Standard kranbil til bakkeplan</option><option value="LARGE_CRANE">Kranbil stor</option><option value="VAN">Varebil</option></select></label>
               <div className="transport-warning">{fulfillmentMethod === "ALREADY_BOOKED" ? "Frakten er allerede bestilt. Ordren ferdigstilles uten mulighet for å sende transportør-e-post fra ordresiden." : transportType === "LARGE_CRANE" ? "NB: Dette påløper ekstrakostnad utenfor standard leveringsvilkår, kontakt transportøren direkte for priser." : transportType === "VAN" ? "NB: Innbæring må eventuelt avtales direkte med transportøren. Dette er kun levering med varebil" : "NB: Standard levering leveres normalt kun til bakkeplan og løftes rett av bil. For andre avtaler må transportør kontaktes."}</div>

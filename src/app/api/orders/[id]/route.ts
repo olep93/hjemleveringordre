@@ -424,7 +424,10 @@ export async function PATCH(
     const latestSnapshot = await ref.get();
     const latest = latestSnapshot.data()!;
 
-    if (body.status === "READY_FOR_LOADING") {
+    if (
+      body.status === "READY_FOR_LOADING" &&
+      body.fulfillmentMethod !== "ALREADY_BOOKED"
+    ) {
       await sendOrderNotification({
         event: "READY_FOR_LOADING",
         subject: `${latest.title ?? "Ordre"} er ferdig plukket`,
