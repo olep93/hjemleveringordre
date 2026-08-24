@@ -344,7 +344,10 @@ export async function PATCH(
     const placement =
       "placement" in body ? body.placement?.trim() || null : current.placement ?? null;
 
-    const incompleteItems = nextItems.filter((item) => !item.checked);
+    // Frakt er en kostnads-/informasjonslinje, ikke en fysisk vare som plukkes.
+    const incompleteItems = nextItems.filter(
+      (item) => !item.isFreight && !item.checked
+    );
 
     if (body.status === "READY_FOR_LOADING") {
       if (incompleteItems.length > 0) {

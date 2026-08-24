@@ -216,7 +216,7 @@ export default function OrderPage({
   }, [initialUser.role]);
 
   const progress = useMemo(() => {
-    const pluckable = order?.items ?? [];
+    const pluckable = (order?.items ?? []).filter((item) => !item.isFreight);
     return {
       checked: pluckable.filter((item) =>
         pickingMode ? draftChecks[item.id] : item.checked
@@ -1000,9 +1000,11 @@ export default function OrderPage({
                 <div className="empty-state">Ingen varelinjer ble tolket.</div>
               ) : (
                 (order.items ?? []).map((item) => {
-                  const checked = pickingMode
-                    ? Boolean(draftChecks[item.id])
-                    : Boolean(item.checked);
+                  const checked = item.isFreight
+                    ? true
+                    : pickingMode
+                      ? Boolean(draftChecks[item.id])
+                      : Boolean(item.checked);
 
                   return (
                     <article
@@ -1047,6 +1049,7 @@ export default function OrderPage({
                           className={`locked-check-indicator ${
                             checked ? "checked" : ""
                           }`}
+                          title={item.isFreight ? "Fraktlinje – krever ikke avhuking" : undefined}
                         >
                           {checked ? <Check size={17} /> : <Lock size={14} />}
                         </div>
