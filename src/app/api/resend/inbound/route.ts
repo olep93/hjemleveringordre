@@ -13,6 +13,16 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
+const inboundOrderEmail = (
+  process.env.ORDER_INBOUND_EMAIL || "ordre@hjemlevering.jobbverktoy.no"
+)
+  .trim()
+  .toLowerCase();
+
+function normalizeEmailAddress(value: string): string {
+  const angleAddress = value.match(/<([^<>]+)>/);
+  return (angleAddress?.[1] ?? value).trim().toLowerCase();
+}
 
 type IncomingEvent = {
   type: string;
@@ -43,8 +53,6 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    await ensureBootstrapData();
-
     const webhookSecret = process.env.RESEND_WEBHOOK_SECRET;
     if (!webhookSecret) throw new Error("RESEND_WEBHOOK_SECRET mangler.");
 
@@ -62,6 +70,19 @@ export async function POST(request: NextRequest) {
     if (event.type !== "email.received") {
       return NextResponse.json({ ok: true, ignored: event.type });
     }
+
+    const isForHjemlevering = event.data.to.some(
+      (recipient) => normalizeEmailAddress(recipient) === inboundOrderEmail
+    );
+
+    if (!isForHjemlevering) {
+      return NextResponse.json({
+        ok: true,
+        ignored: "recipient_not_for_hjemlevering"
+      });
+    }
+
+    await ensureBootstrapData();
 
     const emailId = event.data.email_id;
     const documentId = `email-${emailId}`;
