@@ -95,7 +95,9 @@ export async function POST(
     // Order data and client payloads must never override it.
     const waypointEmail = configuredWaypointEmail;
 
-    const loggedInEmail = String(user.username ?? "")
+    const loggedInEmail = String(
+      user.email || (user.username.includes("@") ? user.username : "")
+    )
       .trim()
       .toLowerCase();
 
@@ -103,7 +105,7 @@ export async function POST(
       return NextResponse.json(
         {
           error:
-            "Den innloggede brukeren må ha jobb-e-post som brukernavn for å sende testmail."
+            "Den innloggede brukeren mangler jobb-e-post i brukerprofilen."
         },
         { status: 400 }
       );

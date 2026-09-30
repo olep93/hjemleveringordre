@@ -30,6 +30,7 @@ type User = {
   id: string;
   username: string;
   displayName: string;
+  email?: string | null;
   role: UserRole;
   active: boolean;
 };
@@ -108,6 +109,7 @@ export default function AdminPage() {
         body: JSON.stringify({
           username: form.get("username"),
           displayName: form.get("displayName"),
+          email: form.get("email"),
           password: form.get("password"),
           role: form.get("role")
         })
@@ -145,6 +147,15 @@ export default function AdminPage() {
     );
     if (!password) return;
     await updateUser(user, { password });
+  }
+
+  async function updateUserEmail(user: User) {
+    const email = window.prompt(
+      `Jobb-e-post for ${user.displayName}:`,
+      user.email ?? ""
+    );
+    if (email === null) return;
+    await updateUser(user, { email });
   }
 
   async function addRecipient(event: FormEvent<HTMLFormElement>) {
@@ -349,6 +360,10 @@ export default function AdminPage() {
                 <input name="displayName" required />
               </label>
               <label>
+                Jobb-e-post
+                <input name="email" type="email" required />
+              </label>
+              <label>
                 Midlertidig passord
                 <input name="password" type="password" minLength={8} required />
               </label>
@@ -404,6 +419,7 @@ export default function AdminPage() {
                 <div>
                   <strong>{user.displayName}</strong>
                   <span>@{user.username}</span>
+                  <span>{user.email || "Jobb-e-post mangler"}</span>
                 </div>
 
                 <select
@@ -419,6 +435,14 @@ export default function AdminPage() {
                   <option value="MANAGER">Leder</option>
                   <option value="ADMIN">Administrator</option>
                 </select>
+
+                <button
+                  className="outline-action compact"
+                  disabled={busy}
+                  onClick={() => void updateUserEmail(user)}
+                >
+                  <Mail size={16} /> Jobb-e-post
+                </button>
 
                 <button
                   className="outline-action compact"

@@ -48,7 +48,8 @@ export async function POST(request: NextRequest) {
       id: doc.id,
       username: data.username,
       displayName: data.displayName || data.username,
-      role: data.role as UserRole
+      role: data.role as UserRole,
+      email: String(data.email ?? "").trim().toLowerCase() || null
     });
 
     return NextResponse.json({
@@ -57,7 +58,8 @@ export async function POST(request: NextRequest) {
         id: doc.id,
         username: data.username,
         displayName: data.displayName || data.username,
-        role: data.role
+        role: data.role,
+        email: String(data.email ?? "").trim().toLowerCase() || null
       }
     });
   } catch (error) {

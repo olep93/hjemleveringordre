@@ -12,6 +12,7 @@ export async function PATCH(
     const body = (await request.json()) as {
       active?: boolean;
       displayName?: string;
+      email?: string;
       role?: UserRole;
       password?: string;
     };
@@ -36,6 +37,16 @@ export async function PATCH(
 
     if (typeof body.active === "boolean") update.active = body.active;
     if (body.displayName?.trim()) update.displayName = body.displayName.trim();
+    if (body.email !== undefined) {
+      const email = body.email.trim().toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        return NextResponse.json(
+          { error: "Gyldig jobb-e-post er påkrevd." },
+          { status: 400 }
+        );
+      }
+      update.email = email;
+    }
     if (body.role) update.role = body.role;
     if (body.password !== undefined) {
       if (body.password.length < 8) {

@@ -15,6 +15,7 @@ export async function GET() {
           id: doc.id,
           username: data.username,
           displayName: data.displayName,
+          email: data.email ?? null,
           role: data.role,
           active: data.active !== false
         };
@@ -35,18 +36,27 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as {
       username?: string;
       displayName?: string;
+      email?: string;
       password?: string;
       role?: UserRole;
     };
 
     const username = String(body.username || "").trim();
     const displayName = String(body.displayName || username).trim();
+    const email = String(body.email || "").trim().toLowerCase();
     const password = String(body.password || "");
     const role = body.role;
 
     if (!username || password.length < 8) {
       return NextResponse.json(
         { error: "Brukernavn og passord på minst 8 tegn er påkrevd." },
+        { status: 400 }
+      );
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return NextResponse.json(
+        { error: "Gyldig jobb-e-post er påkrevd." },
         { status: 400 }
       );
     }
@@ -73,6 +83,7 @@ export async function POST(request: NextRequest) {
       username,
       usernameLower: username.toLowerCase(),
       displayName,
+      email,
       role,
       passwordHash: hashPassword(password),
       active: true,

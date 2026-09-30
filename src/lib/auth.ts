@@ -9,6 +9,7 @@ export type SessionUser = {
   username: string;
   displayName: string;
   role: UserRole;
+  email?: string | null;
 };
 
 const COOKIE_NAME = "hjemlevering_session";
@@ -84,6 +85,7 @@ export async function ensureBootstrapData(): Promise<void> {
       createdAt: new Date().toISOString()
     });
   }
+
 }
 
 export async function createSession(user: SessionUser): Promise<void> {
@@ -146,11 +148,28 @@ export async function getSessionUser(): Promise<SessionUser | null> {
     const userSnap = await adminDb.collection("users").doc(decoded.id).get();
     if (!userSnap.exists || userSnap.data()?.active === false) return null;
 
+    const liveUser = userSnap.data()!;
+    let email = String(liveUser.email ?? "").trim().toLowerCase();
+    const isLabinot = [liveUser.username, liveUser.displayName].some((value) =>
+      String(value ?? "").toLowerCase().includes("labinot")
+    );
+
+    if (!email && isLabinot) {
+      email = "labinot.plakiqi@coop.no";
+      await userSnap.ref.update({
+        email,
+        updatedAt: new Date().toISOString()
+      });
+    }
+
     return {
       id: decoded.id,
-      username: decoded.username,
-      displayName: decoded.displayName,
-      role: decoded.role
+      username: String(liveUser.username ?? decoded.username),
+      displayName: String(
+        liveUser.displayName ?? liveUser.username ?? decoded.displayName
+      ),
+      role: liveUser.role as UserRole,
+      email: email || null
     };
   } catch {
     return null;

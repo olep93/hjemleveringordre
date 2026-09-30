@@ -421,11 +421,6 @@ export default function OrderPage({
 
   async function sendWaypointEmail(current: Order) {
     if (current.source === "CLICK_AND_COLLECT") return;
-    const to = current.pickupRecipientEmail || pickupRecipientEmail.trim();
-    if (!to) {
-      showValidationFeedback("Transportørens e-postadresse mangler i administratorinnstillingene.", {});
-      return;
-    }
 
     setSaving(true);
     setError(null);
@@ -435,7 +430,7 @@ export default function OrderPage({
       const response = await fetch(`/api/orders/${current.id}/waypoint-email`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ to })
+        body: JSON.stringify({})
       });
       const result = await response.json();
       if (!response.ok) {
